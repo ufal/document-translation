@@ -1,5 +1,7 @@
 import requests, sys
+import functools
 
+@functools.cache
 def translate_text(input_text):
     url = "https://translator.cuni.cz/api/v2/languages"
     headers = {
