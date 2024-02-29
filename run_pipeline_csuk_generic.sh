@@ -12,7 +12,7 @@ tikal -xm ${outdir}/${file} -sl $srclang -to ${outdir}/${file}
 perl m4loc/xliff/remove_markup.pm < ${outdir}/${file}.$srclang > ${outdir}/${file}.$srclang.nomarkup
 
 # translate and align (comment out if already computed to save time)
-cat ${outdir}/${file}.$srclang.nomarkup | python translate.py > ${outdir}/${file}.$trglang.nomarkup
+cat ${outdir}/${file}.$srclang.nomarkup | python translate.py $srclang $trglang > ${outdir}/${file}.$trglang.nomarkup
 python align.py ${outdir}/${file}.$srclang.nomarkup ${outdir}/${file}.$trglang.nomarkup > ${outdir}/${file}.$srclang-$trglang.align.nomarkup
 
 perl m4loc/xliff/reinsert_wordalign.pm ${outdir}/${file}.$srclang ${outdir}/${file}.$srclang-$trglang.align.nomarkup < ${outdir}/${file}.$trglang.nomarkup > ${outdir}/${file}.$trglang.withmarkup
