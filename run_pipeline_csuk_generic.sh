@@ -1,9 +1,15 @@
 datadir="../data"
 outdir="../output"
 mkdir -p $outdir
-file="test.odt"
-srclang="cs"
-trglang="en"
+file="edge_cases.html"
+srclang="en"
+trglang="cs"
+
+# check if file exists
+if [ ! -f "$datadir/$file" ]; then
+    echo "File $datadir/$file does not exist."
+    exit 1
+fi
 
 cp $datadir/$file $outdir
 
@@ -12,8 +18,10 @@ tikal -xm ${outdir}/${file} -sl $srclang -to ${outdir}/${file}
 perl m4loc/xliff/remove_markup.pm < ${outdir}/${file}.$srclang > ${outdir}/${file}.$srclang.nomarkup
 
 # translate and align (comment out if already computed to save time)
-cat ${outdir}/${file}.$srclang.nomarkup | python translate.py $srclang $trglang > ${outdir}/${file}.$trglang.nomarkup
-python align.py ${outdir}/${file}.$srclang.nomarkup ${outdir}/${file}.$trglang.nomarkup > ${outdir}/${file}.$srclang-$trglang.align.nomarkup
+echo "Translate"
+time cat ${outdir}/${file}.$srclang.nomarkup | python translate.py $srclang $trglang > ${outdir}/${file}.$trglang.nomarkup
+echo "Align"
+time python align.py ${outdir}/${file}.$srclang.nomarkup ${outdir}/${file}.$trglang.nomarkup > ${outdir}/${file}.$srclang-$trglang.align.nomarkup
 
 perl m4loc/xliff/reinsert_wordalign.pm ${outdir}/${file}.$srclang ${outdir}/${file}.$srclang-$trglang.align.nomarkup < ${outdir}/${file}.$trglang.nomarkup > ${outdir}/${file}.$trglang.withmarkup
 tikal -lm ${outdir}/${file} -sl $src -tl $trg -overtrg -from ${outdir}/${file}.$trglang.withmarkup -to ${outdir}/${file}.$trglang
