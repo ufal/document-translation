@@ -1,9 +1,11 @@
+set -euxo pipefail
+
 datadir="../data"
 outdir="../output"
 mkdir -p $outdir
-file="edge_cases.html"
-srclang="en"
-trglang="cs"
+file="balservis.html"
+srclang="cs"
+trglang="en"
 
 # check if file exists
 if [ ! -f "$datadir/$file" ]; then
@@ -21,10 +23,10 @@ perl m4loc/xliff/remove_markup.pm < ${outdir}/${file}.$srclang > ${outdir}/${fil
 echo "Translate"
 time cat ${outdir}/${file}.$srclang.nomarkup | python translate.py $srclang $trglang > ${outdir}/${file}.$trglang.nomarkup
 echo "Align"
-time python align.py ${outdir}/${file}.$srclang.nomarkup ${outdir}/${file}.$trglang.nomarkup > ${outdir}/${file}.$srclang-$trglang.align.nomarkup
+time python align.py ${outdir}/${file}.$srclang.nomarkup ${outdir}/${file}.$trglang.nomarkup $srclang $trglang > ${outdir}/${file}.$srclang-$trglang.align.nomarkup
 
 perl m4loc/xliff/reinsert_wordalign.pm ${outdir}/${file}.$srclang ${outdir}/${file}.$srclang-$trglang.align.nomarkup < ${outdir}/${file}.$trglang.nomarkup > ${outdir}/${file}.$trglang.withmarkup
-tikal -lm ${outdir}/${file} -sl $src -tl $trg -overtrg -from ${outdir}/${file}.$trglang.withmarkup -to ${outdir}/${file}.$trglang
+tikal -lm ${outdir}/${file} -sl $srclang -tl $trglang -overtrg -from ${outdir}/${file}.$trglang.withmarkup -to ${outdir}/${file}.$trglang
 
 # python unescape_fraus.py --skip-xml-declaration ${outdir}/${file}.reconstructed ${outdir}/${file}.reconstructed.normalized
 # tikal -lm ${outdir}/${file} -fc $format -sl cs -tl uk -overtrg -from ${outdir}/${file}.cs.unescaped.notags -to ${outdir}/${file}.uk
