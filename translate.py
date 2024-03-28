@@ -11,24 +11,6 @@ def _handle_response(response):
         print(response.text)
 
 
-def translate_text_csuk(input_text, src_lang, trg_lang):
-    assert src_lang in ['cs', 'uk'] and trg_lang in ['cs', 'uk']
-    url = "https://translator.cuni.cz/api/v2/languages"
-    headers = {
-        "accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
-    data = {
-            "src": src_lang,
-            "tgt": trg_lang,
-            "input_text": input_text,
-            "logInput": "false",
-            "author": "H-edu",
-    }
-
-    response = requests.post(url, headers=headers, data=data)
-    return _handle_response(response)
-
 def translate_text_lindat(input_text, src_lang, trg_lang):
     assert src_lang+"-"+trg_lang in [
         "en-cs","cs-en","en-hi","en-fr","fr-en","en-de","de-en","ru-en","en-ru","en-pl","pl-en","uk-cs","cs-uk","ru-cs","cs-ru"
@@ -47,12 +29,6 @@ def translate_text_lindat(input_text, src_lang, trg_lang):
     response = requests.post(url, headers=headers, data=data)
     return _handle_response(response)
 
-
-def translate_text(input_text, src_lang, trg_lang):
-    if src_lang in ['cs', 'uk'] and trg_lang in ['cs', 'uk']:
-        return translate_text_csuk(input_text)
-    else:
-        return translate_text_lindat(input_text, src_lang, trg_lang)
 
 class BatchRequest:
     def __init__(self, batch_max_bytes, callback, compute_size=lambda x: len(x.encode())):
@@ -81,7 +57,7 @@ class BatchRequest:
 def _send_batch(batch, src_lang, trg_lang):
     batch_str = "".join(batch)
     print(repr(batch_str), file=sys.stderr)
-    translation = translate_text(batch_str, src_lang, trg_lang)
+    translation = translate_text_lindat(batch_str, src_lang, trg_lang)
     if translation.endswith("\n\n"):
         translation = translation[:-2]
     print(repr(translation), file=sys.stderr)

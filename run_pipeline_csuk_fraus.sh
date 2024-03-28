@@ -1,44 +1,49 @@
-outdir="../output"
+set -euo pipefail
+outdir="../output_fraus_alltexts_fixed"
 mkdir -p $outdir
-file="1892.xml"
 
-python unescape_fraus.py --skip-xml-declaration ../data/${file} ${outdir}/${file}
-# python fix_fraus_xml_encoding.py ../data/${file} ${outdir}/${file}
+pipeline() {
+    fullpath=$1
+    file=${fullpath##*/}
+    echo "Processing ${file}"
+    
+    if [ ! -f "$fullpath" ]; then
+        echo "File $fullpath does not exist."
+        return 1
+    fi
+    if [ -f "${outdir}/${file}.uk" ]; then
+        echo "File $fullpath exists already, skipping."
+        return 0
+    fi
 
-format="okf_xml@fraus.fprm"
-tikal -xm ${outdir}/${file} -fc $format -sl cs -to ${outdir}/${file}
+    python unescape_fraus.py --skip-xml-declaration ${fullpath} ${outdir}/${file}
 
-python escape_tool.py --unescape ${outdir}/${file}.cs ${outdir}/${file}.cs.html
+    format="okf_xml@fraus.fprm"
+    tikal -xm ${outdir}/${file} -fc $format -sl cs -to ${outdir}/${file}
 
-awk '{ print "<p>" $0 "</p>" }' ${outdir}/${file}.cs.html > ${outdir}/${file}.cs.p.html
+    python escape_tool.py --unescape ${outdir}/${file}.cs ${outdir}/${file}.cs.html
 
-format_2="okf_html"
-tikal -xm ${outdir}/${file}.cs.p.html -fc $format_2 -sl cs -to ${outdir}/${file}.cs.second_extraction
+    awk '{ print "<p>" $0 "</p>" }' ${outdir}/${file}.cs.html > ${outdir}/${file}.cs.p.html
 
-perl m4loc/xliff/remove_markup.pm < ${outdir}/${file}.cs.second_extraction.cs > ${outdir}/${file}.cs.second_extraction.nomarkup
+    format_2="okf_html"
+    tikal -xm ${outdir}/${file}.cs.p.html -fc $format_2 -sl cs -to ${outdir}/${file}.cs.second_extraction
 
-# translate and align (comment out if already computed to save time)
-cat ${outdir}/${file}.cs.second_extraction.nomarkup | python translate.py > ${outdir}/${file}.uk.second_extraction.nomarkup
-python align.py ${outdir}/${file}.cs.second_extraction.nomarkup ${outdir}/${file}.uk.second_extraction.nomarkup > ${outdir}/${file}.cs-uk.align.second_extraction.nomarkup
+    perl m4loc/xliff/remove_markup.pm < ${outdir}/${file}.cs.second_extraction.cs > ${outdir}/${file}.cs.second_extraction.nomarkup
 
-perl m4loc/xliff/reinsert_wordalign.pm ${outdir}/${file}.cs.second_extraction.cs ${outdir}/${file}.cs-uk.align.second_extraction.nomarkup < ${outdir}/${file}.uk.second_extraction.nomarkup > ${outdir}/${file}.uk.second_extraction.uk
+    # translate and align (comment out if already computed to save time)
+    time cat ${outdir}/${file}.cs.second_extraction.nomarkup | python translate.py cs uk > ${outdir}/${file}.uk.second_extraction.nomarkup
+    time python align.py ${outdir}/${file}.cs.second_extraction.nomarkup ${outdir}/${file}.uk.second_extraction.nomarkup cs uk > ${outdir}/${file}.cs-uk.align.second_extraction.nomarkup
 
-tikal -lm ${outdir}/${file}.cs.p.html -fc $format_2 -sl cs -tl uk -overtrg -from ${outdir}/${file}.uk.second_extraction.uk -to ${outdir}/${file}.uk.p.html
-sed "s/^<p>\(.*\)<\/p>$/\1/" ${outdir}/${file}.uk.p.html > ${outdir}/${file}.uk.html
-tikal -lm ${outdir}/${file} -fc $format -sl cs -tl uk -overtrg -from ${outdir}/${file}.uk.html -to ${outdir}/${file}.uk
+    perl m4loc/xliff/reinsert_wordalign.pm ${outdir}/${file}.cs.second_extraction.cs ${outdir}/${file}.cs-uk.align.second_extraction.nomarkup < ${outdir}/${file}.uk.second_extraction.nomarkup > ${outdir}/${file}.uk.second_extraction.uk
 
-# python unescape_fraus.py --skip-xml-declaration ${outdir}/${file}.reconstructed ${outdir}/${file}.reconstructed.normalized
-# tikal -lm ${outdir}/${file} -fc $format -sl cs -tl uk -overtrg -from ${outdir}/${file}.cs.unescaped.notags -to ${outdir}/${file}.uk
+    tikal -lm ${outdir}/${file}.cs.p.html -fc $format_2 -sl cs -tl uk -overtrg -from ${outdir}/${file}.uk.second_extraction.uk -to ${outdir}/${file}.uk.p.html
+    sed "s/^<p>\(.*\)<\/p>$/\1/" ${outdir}/${file}.uk.p.html > ${outdir}/${file}.uk.html
+    tikal -lm ${outdir}/${file} -fc $format -sl cs -tl uk -overtrg -from ${outdir}/${file}.uk.html -to ${outdir}/${file}.uk
 
+    # python unescape_fraus.py --skip-xml-declaration ${outdir}/${file}.reconstructed ${outdir}/${file}.reconstructed.normalized
+    # tikal -lm ${outdir}/${file} -fc $format -sl cs -tl uk -overtrg -from ${outdir}/${file}.cs.unescaped.notags -to ${outdir}/${file}.uk
+}
 
-
-
-# OLD
-
-# remove tags
-# sed 's/<[^>]*>//g' ${outdir}/${file}.cs.unescaped > ${outdir}/${file}.cs.unescaped.notags
-
-# echo "Translation"
-# cat "${outdir}/${file}.cs.unescaped.notags" | python translate.py > "${outdir}/${file}.uk.unescaped.notags"
-
-# python align.py ${outdir}/${file}.cs.unescaped.notags ${outdir}/${file}.uk.unescaped.notags > ${outdir}/${file}.alignments
+for file in ../data/fraus_new_batch/EdUKate_2/updated_structure/*.xml ../data/fraus_new_batch/EdUKate1/*.xml; do
+    time pipeline $file
+done

@@ -1,1 +1,5 @@
 requests
+tqdm
+mosestokenizer
+tokenize_uk @ git+https://github.com/kukas/tokenize-uk.git
+lxml
