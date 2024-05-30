@@ -4,9 +4,13 @@ from typing import Callable, Dict, List, Tuple
 import unittest
 import re
 from enum import Enum
-from mosestokenizer import MosesTokenizer
+# from mosestokenizer import MosesTokenizer
 
 from termcolor import colored
+
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 class Translator:
     def translate(self, src: str) -> str:
@@ -38,17 +42,34 @@ class Segment(object):
         if cls.whitespace_regex.match(string):
             return cls(string, SegmentType.WHITESPACE)
         return cls(string, SegmentType.TEXT)
-    
-    def __str__(self) -> str:
-        # string = self.string.replace(" ", "_")
-        string = self.string
+
+    def debug_color(self, string: str) -> str:
         if self.type == SegmentType.TAG:
             return colored(string, "black", "on_cyan", attrs=["bold"])
         if self.type == SegmentType.WHITESPACE:
             return colored(string, "white", "on_blue")
         return colored(string, "black", "on_white")
 
-class SegmentedText(object):
+    def __len__(self) -> int:
+        return len(self.string)
+    
+    def __str__(self) -> str:
+        return self.debug_color(self.string)
+
+class JoinedSegment(Segment):
+    def __init__(self, segments: List[Segment]):
+        self.segments = segments
+    
+    def __len__(self) -> int:
+        return sum(len(s) for s in self.segments)
+    
+    def debug_color(self, string: str) -> str:
+        return colored(string, "black", "on_yellow", attrs=["underline"])
+    
+    def __str__(self) -> str:
+        return ''.join(colored(str(x), attrs=["underline"]) for x in self.segments)
+
+class SegmentedText(list[Segment]):
     """
     A text that has been split into segments of text, tags and whitespace.
     The main assumption is that joining the segments will yield the original text.
@@ -58,8 +79,8 @@ class SegmentedText(object):
     whitespace_regex = re.compile(r'\s+')
     segments_regex = re.compile(r'('+tag_pattern+r'|\s+|[^<\s]+|[^>\s]+)')
 
-    def __init__(self, segments: List[Segment]):
-        self.segments = segments
+    def __init__(self, iterable: List[Segment]):
+        super().__init__(iterable)
 
     @classmethod
     def from_string(cls, string: str):
@@ -67,11 +88,15 @@ class SegmentedText(object):
         segment_strings = map(lambda x: x[0], segment_strings)
         return cls([Segment.from_string(s) for s in segment_strings])
     
+    @classmethod
+    def from_string_list(cls, strings: List[str]):
+        return cls([Segment.from_string(s) for s in strings])
+    
     def __str__(self) -> str:
-        return ''.join(str(x) for x in self.segments)
+        return ''.join(str(x) for x in self)
 
     def translation_view(self):
-        return ''.join(s.string for s in self.segments if s.type == SegmentType.TEXT)
+        return ''.join(s.string for s in self if s.type == SegmentType.TEXT)
     
     def alignment_view(self):
         pass
@@ -91,7 +116,10 @@ class Alignment:
         return self.src_to_tgt.get(i, [])
 
     def map(self, f: Callable[[int, int], Tuple[int, int]]):
-        self.mapping = list(map(lambda x: f(*x), self.mapping))
+        return Alignment(list(map(lambda x: f(*x), self.mapping)))
+    
+    def __str__(self) -> str:
+        return f"Alignment({self.mapping})"
 
 class AlignedSegments(object):
     def __init__(self, src_segments: SegmentedText, tgt_segments: SegmentedText, alignment: Alignment):
@@ -100,8 +128,39 @@ class AlignedSegments(object):
         self.alignment = alignment
 
     def insert_segment(self, index: int, segment: Segment) -> None:
-        self.tgt.segments.insert(index, segment)
-        self.alignment.map(lambda i, j: (i, j+1) if j >= index else (i, j))
+        self.tgt.insert(index, segment)
+        self.alignment = self.alignment.map(lambda i, j: (i, j+1) if j >= index else (i, j))
+    
+    def join_adjacent_segments(self, index: int) -> None:
+        """
+        Joins the segments at `index` and `index+1` and inserts the result at `index`.
+        If the segment at `index` is already a JoinedSegment, the segments are appended to it.
+        """
+        fst = self.src.pop(index)
+        snd = self.src.pop(index)
+        if isinstance(fst, JoinedSegment):
+            fst.segments.append(snd)
+            self.src.insert(index, fst)
+        else:
+            new_seg = JoinedSegment([fst, snd])
+            self.src.insert(index, new_seg)
+        self.alignment = self.alignment.map(lambda i, j: (i-1, j) if i > index else (i, j))
+    
+    def flatten_segments(self) -> None:
+        # TODO
+        pass
+    
+    def __str__(self) -> str:
+        output = str(self.src) + "\n"
+        output += "".join([seg.debug_color(str(i)) + " "*(len(seg)-1) for i, seg in enumerate(self.src)])
+        output += "\n"
+        output += "\n"
+        output += str(self.tgt) + "\n"
+        output += "".join([seg.debug_color(str(i)) + " "*(len(seg)-1) for i, seg in enumerate(self.tgt)])
+
+        output += "\n"
+        output += str(self.alignment)
+        return output
     
 class TagType(Enum):
     OPEN = 0
@@ -109,6 +168,7 @@ class TagType(Enum):
     SELFCLOSE = 2
 
 class Tag:
+    # TODO
     def __init__(self, tagname: str, id: int, type: TagType):
         self.id = id
         self.tagname = tagname
@@ -122,7 +182,7 @@ class Tag:
         match = re.search(r'<(g|x|bx|ex|lb|mrk) id="(\d+)"(/)?>', string)
         if not match:
             raise ValueError
-        return cls(match.group(1), int(match.group(2)), match.group(3) != "/")
+        return cls(match.group(1), int(match.group(2)), TagType.OPEN)
 
     def __str__(self) -> str:
         return f'<{self.tagname} id="{self.id}">'
@@ -139,7 +199,19 @@ class TagReinserter:
         """
         Reinserts all segments from `src` that are not aligned to any segment in `tgt`.
         """
-        for i, seg in enumerate(aligned_segments.src.segments):
+        # simplify source segments - join the adjacent reinserted segments together
+        def _to_be_reinserted(i: int) -> bool:
+            return aligned_segments.alignment.get_src(i) == []
+        i = 0
+        while i < len(aligned_segments.src) - 1:
+            # fst = aligned_segments.src[i]
+            # snd = aligned_segments.src[i+1]
+            if _to_be_reinserted(i) and _to_be_reinserted(i+1):
+                aligned_segments.join_adjacent_segments(i)
+            else:
+                i += 1
+        print(aligned_segments)
+        for i, seg in enumerate(aligned_segments.src):
             if aligned_segments.alignment.get_src(i) != []:
                 # this segment from src is aligned to a segment in tgt
                 # therefore it does not need to be reinserted (it's already in tgt)
@@ -147,6 +219,8 @@ class TagReinserter:
             else:
                 # this segment from src is not aligned to a segment in tgt
                 # therefore it needs to be reinserted
+                # print(i, seg, i+1, "->", aligned_segments.alignment.get_src(i+1))
+                # print(i, seg, i-1, "->", aligned_segments.alignment.get_src(i-1))
                 if aligned_segments.alignment.get_src(i+1) != []:
                     # the next segment from src is aligned to a segment in tgt
                     # we insert the current segment before the next segment
@@ -155,15 +229,18 @@ class TagReinserter:
                 elif aligned_segments.alignment.get_src(i-1) != []:
                     # the previous segment from src is aligned to a segment in tgt
                     # we insert the current segment after the previous segment
-                    index = max(aligned_segments.alignment.get_src(i-1))
+                    index = max(aligned_segments.alignment.get_src(i-1)) + 1
                     aligned_segments.insert_segment(index, seg)
                 else:
                     # no segment in tgt is aligned to this segment from src
                     # we insert the current segment at the end
+                    logging.debug("no segment in tgt is aligned to this segment from src")
                     aligned_segments.insert_segment(len(aligned_segments.tgt.segments), seg)
                     # TODO: find the best place to insert the segment by counting 
                     #       the number of aligned segments before and after the reinserted segments
-        
+
+        aligned_segments.flatten_segments()
+
         return aligned_segments
 
     @staticmethod
@@ -194,12 +271,35 @@ class TagReinserter:
         # for 
 
 class TagReinserterTester(unittest.TestCase):
-    def test_reinsert_segments(self):
-        src = SegmentedText.from_string("This is a <g id='1'>test</g>.")
-        tgt = SegmentedText.from_string("Toto je test.")
-        print(tgt)
-        # alignment = Alignment([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)])
+    def test_reinsert_segments_simple(self):
+        src = SegmentedText.from_string_list(["This","is","<x id='1'/>","<x id='2'/>","<x id='3'/>","test","<x id='2'/>",".","<x id='3'/>","<x id='4'/>","<x id='5'/>"])
+        tgt = SegmentedText.from_string_list(["Toto"," ","je"," ","test","."])
+        alignment = Alignment([(0, 0), (1, 2), (5, 4), (7, 5)])
+        
+        aligned_segments = AlignedSegments(src, tgt, alignment)
+        
+        print("BEGIN STATE")
+        print(aligned_segments)
 
+        print("PROCEED")
+        TagReinserter.reinsert_segments(aligned_segments)
+
+        print("END STATE")
+        print(aligned_segments)
+
+        # tgt_reinserted = SegmentedText.from_string_list(["Toto"," ","je"," ","<x id='1'/>","test","<x id='2'/>","."])
+        # self.assertEqual(aligned_segments.tgt, tgt_reinserted)
+    
+    def test_reinsert_tags_simple(self):
+        src = SegmentedText.from_string_list([
+            "<x id='1'>","<x id='2'>","Můj"," ","<x id='3'>","přítel","</x>","</x>",","," ",
+            "který"," ","pracuje"," ","<x id='4'>","v"," ","bankovním"," ","sektoru","</x>",","," ",
+            "<x id='5'>","se"," ","v"," ","říjnu"," ","žení","</x>",".","</x>"
+        ])
+        print(src)
+        src = SegmentedText(filter(lambda x: x.type == SegmentType.WHITESPACE, src))
+        tgt = SegmentedText.from_string_list(["A"," ","friend"," ","of"," ","mine"," ","who"," ","works"," ","in"," ","banking"," ","is"," ","getting"," ","married"," ","in"," ","October","."])
+        alignment = Alignment([(0, 0), (1, 2), (5, 4), (7, 5)])
 
 class TranslateMarkupTester(unittest.TestCase):
     pass
