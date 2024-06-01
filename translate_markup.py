@@ -307,13 +307,11 @@ class AlignedSegments:
         assert self.alignment.mapping == []
         src_iter = enumerate(self.src)
         for i, seg_tgt in enumerate(self.tgt):
-            print(i, seg_tgt.debug_str())
             # skip sentence separators
             if isinstance(seg_tgt, SentenceSeparator):
                 continue
             while True:
                 j, seg_src = next(src_iter)
-                print("\t", j, seg_tgt.debug_str())
                 if seg_src == seg_tgt:
                     self.alignment.mapping.append((j, i))
                     break
@@ -322,23 +320,6 @@ class AlignedSegments:
                 if isinstance(seg_tgt, WhitespaceSegment):
                     break
 
-        # assume that src contains extra elements and (src - extra) == tgt
-        # tgt_iter = enumerate(self.tgt)
-        # for i, seg_src in enumerate(self.src):
-        #     print(i, seg_src.debug_str())
-        #     # skip sentence separators
-        #     if seg_src.type == SegmentType.SENTENCE_SEP:
-        #         continue
-        #     while True:
-        #         j, seg_tgt = next(tgt_iter)
-        #         # do no try to find whitespace, it might be missing
-        #         if seg_src.type == SegmentType.WHITESPACE:
-        #             break
-        #         print("\t", j, seg_tgt)
-        #         if seg_tgt == seg_src:
-        #             self.alignment.mapping.append((i, j))
-        #             break
-    
     def swap_sides(self) -> "AlignedSegments":
         # TODO (low priority): alignment should be more of a black box
         alignment = self.alignment.map(lambda i, j: (j, i))
@@ -363,7 +344,22 @@ class TagReinserter:
         """
         # simplify source segments - join the adjacent reinserted segments together
         def _to_be_reinserted(i: int) -> bool:
-            return aligned_segments.alignment.get_src(i) == [] and isinstance(aligned_segments.src[i], TagSegment)
+            segment = aligned_segments.src[i]
+            # joined segment is a helper method for reinsert_segment and we want to reinsert it always
+            if isinstance(segment, JoinedSegment):
+                return True
+            # if the segment from `src`` is aligned already with something in `tgt``, it should not be reinserted (as it is already there)
+            if aligned_segments.alignment.get_src(i) != []:
+                return False
+            if isinstance(segment, PairedTagSegment):
+                logger.warn(f"Found unaligned PairedTagSegment {segment}, maybe forgot to run TagReinserter.reinsert_tags?")
+            # reinsert unaligned tags (should be self-closing tags only if the previous step was TagReinserter.reinsert_tags)
+            if isinstance(segment, TagSegment):
+                return True
+            # reinsert whitespace if it is not a simple space and it is not only newlines
+            if isinstance(segment, WhitespaceSegment) and (re.match(r"( |\n+)", segment) is None):
+                return True
+            return False 
         i = 0
         while i < len(aligned_segments.src) - 1:
             # fst = aligned_segments.src[i]
@@ -374,15 +370,13 @@ class TagReinserter:
                 i += 1
 
         for i, seg in enumerate(aligned_segments.src):
-            if aligned_segments.alignment.get_src(i) != []:
+            if not _to_be_reinserted(i):
                 # this segment from src is aligned to a segment in tgt
                 # therefore it does not need to be reinserted (it's already in tgt)
                 continue
             else:
                 # this segment from src is not aligned to a segment in tgt
                 # therefore it needs to be reinserted
-                # print(i, seg, i+1, "->", aligned_segments.alignment.get_src(i+1))
-                # print(i, seg, i-1, "->", aligned_segments.alignment.get_src(i-1))
                 if aligned_segments.alignment.get_src(i+1) != []:
                     # the next segment from src is aligned to a segment in tgt
                     # we insert the current segment before the next segment
@@ -499,15 +493,12 @@ class MarkupTranslator:
         src_segments = SegmentedText.from_string(src)
         src_segments = src_segments.tokenize(self.tokenizer)
 
-        # print(":: src segments before translation:")
-        # src_segments.debug_print()
-
         src_for_translation, src_segments_to_src_for_translation = src_segments.translation_view()
 
         print("TRANSLATION")
         src_sentences, tgt_sentences = self.translator.translate(str(src_for_translation))
-        print()
-        print(":: src sentences")
+        # print()
+        # print(":: src sentences")
         src_sentences_segments = SegmentedText.from_sentences(src_sentences)
         src_sentences_segments = src_sentences_segments.tokenize(self.tokenizer)
         # prepare source sentences for word alignment
@@ -515,11 +506,11 @@ class MarkupTranslator:
 
         # recover the sentence segmentation from src_sentences
         src_for_translation_to_src_sentences = AlignedSegments(src_for_translation, src_sentences_segments)
-        src_for_translation_to_src_sentences.debug_print()
+        # src_for_translation_to_src_sentences.debug_print()
         src_for_translation_to_src_sentences.recover_alignment()
-        src_for_translation_to_src_sentences.debug_print()
+        # src_for_translation_to_src_sentences.debug_print()
 
-        print(":: tgt sentences")
+        # print(":: tgt sentences")
         tgt_sentences_segments = SegmentedText.from_sentences(tgt_sentences)
         tgt_sentences_segments = tgt_sentences_segments.tokenize(self.tokenizer)
         # prepare target sentences for word alignment
@@ -546,4 +537,9 @@ class MarkupTranslator:
         TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
         src_segments_to_tgt_sentences.debug_print()
 
-        return "\n".join(tgt_sentences)
+        print()
+        print(":: reinsert missing segments")
+        TagReinserter.reinsert_segments(src_segments_to_tgt_sentences)
+        src_segments_to_tgt_sentences.debug_print()
+
+        return str(src_segments_to_tgt_sentences.tgt)

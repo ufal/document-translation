@@ -69,7 +69,7 @@ class DummyTranslator(Translator):
                 if line.startswith("\n") and output:
                     output[-1] += line
                 else:
-                    output.extend([x[0].lstrip() for x in re.findall(r"([^\.\!\?]+(\.|\!|\?))", line)])
+                    output.extend([x[0] for x in re.findall(r"([^\.\!\?]+(\.|\!|\?))", line)])
                     # output += 
             return output
 
@@ -94,13 +94,13 @@ class MarkupTranslatorTester(unittest.TestCase):
         tgt_expected = "Hello world! How are you?\n\nI am fine.\n\n"
         
         tgt = self.markup_translator.translate(src)
-        # self.assertEqual(tgt, tgt_expected)
+        self.assertEqual(tgt, tgt_expected)
 
     def test_simple(self):
         src = "Ahoj <g id='1'>světe</g>!<ex id='2'/> Jak se máš?\n\n<bx id='3'/>Mám se <g id='4'>fajn</g>.\n\n"
         tgt_expected = "Hello <g id='1'>world</g>!<ex id='2'/> How are you?\n\n<bx id='3'/>I am <g id='4'>fine</g>.\n\n"
         tgt = self.markup_translator.translate(src)
-        # self.assertEqual(tgt, tgt_expected)
+        self.assertEqual(tgt, tgt_expected)
     # TODO: otestovat vnořené tagy, taky jestli se zachovává jejich pořadí
 
 if __name__ == "__main__":
