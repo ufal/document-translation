@@ -62,6 +62,12 @@ class Segment(object):
     def __str__(self) -> str:
         return self.string
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Segment):
+            return self.string == other.string and self.type == other.type
+        else:
+            return False
+
     def debug_str(self) -> str:
         string = repr(self.string) if self.whitespace_regex.match(self.string) else self.string
         return self.debug_color(string)
@@ -177,7 +183,7 @@ class SegmentedText(list[Segment]):
             else:
                 tgt.append(s)
                 alignment.mapping.append((i, len(tgt) - 1))
-        return tgt, alignment
+        return tgt, AlignedSegments(self, tgt, alignment)
     
     # def iter_characters(self):
     #     for i, seg in enumerate(self):
@@ -191,7 +197,7 @@ class SegmentedText(list[Segment]):
             if s.type == SegmentType.TEXT or s.type == SegmentType.SENTENCE_SEP:
                 tgt.append(s)
                 alignment.mapping.append((i, len(tgt) - 1))
-        return tgt, alignment
+        return tgt, AlignedSegments(self, tgt, alignment)
 
     def split_sentences(self):
         i = 0
@@ -283,6 +289,60 @@ class AlignedSegments:
         self.src.debug_print()
         self.tgt.debug_print()
         print(self.alignment)
+    
+    def recover_alignment(self) -> None:
+        # greedily recover the alignment based on segment equality
+        # assume that tgt contains extra elements and src == (tgt - extra)
+        assert self.alignment.mapping == []
+        src_iter = enumerate(self.src)
+        for i, seg_tgt in enumerate(self.tgt):
+            print(i, seg_tgt.debug_str())
+            # skip sentence separators
+            if seg_tgt.type == SegmentType.SENTENCE_SEP:
+                continue
+            while True:
+                j, seg_src = next(src_iter)
+                print("\t", j, seg_tgt.debug_str())
+                if seg_src == seg_tgt:
+                    self.alignment.mapping.append((j, i))
+                    break
+                # if not found immediately do not continue 
+                # searching for whitespace, it might be missing
+                if seg_tgt == SegmentType.WHITESPACE:
+                    break
+
+        # assume that src contains extra elements and (src - extra) == tgt
+        # tgt_iter = enumerate(self.tgt)
+        # for i, seg_src in enumerate(self.src):
+        #     print(i, seg_src.debug_str())
+        #     # skip sentence separators
+        #     if seg_src.type == SegmentType.SENTENCE_SEP:
+        #         continue
+        #     while True:
+        #         j, seg_tgt = next(tgt_iter)
+        #         # do no try to find whitespace, it might be missing
+        #         if seg_src.type == SegmentType.WHITESPACE:
+        #             break
+        #         print("\t", j, seg_tgt)
+        #         if seg_tgt == seg_src:
+        #             self.alignment.mapping.append((i, j))
+        #             break
+    
+    def swap_sides(self) -> "AlignedSegments":
+        # TODO (low priority): alignment should be more of a black box
+        alignment = self.alignment.map(lambda i, j: (j, i))
+        return AlignedSegments(self.tgt, self.src, alignment)
+    
+    def compose(self, other: Self) -> "AlignedSegments":
+        assert self.tgt == other.src
+        # TODO (low priority): move this into Alignment method
+        new_alignment: List[Tuple[int, int]] = []
+        for (i, j) in self.alignment.mapping:
+            for (k, l) in other.alignment.mapping:
+                if j == k:
+                    new_alignment.append((i, l))
+        return AlignedSegments(self.src, other.tgt, Alignment(new_alignment))
+
 
 class TagReinserter:
     @staticmethod
@@ -377,6 +437,10 @@ class TagReinserter:
                     raise ValueError(f"Not a TagSegment string: {string}")
 
         tagged_src: List[Segment] = []
+        # src_to_tagged = AlignedSegments(aligned_segments.src, aligned_segments.src)
+        # src_to_tagged.recover_alignment()
+        # src_to_tagged.filter_tgt(lambda seg: )
+        # src_to_tagged = AlignedSegments(aligned_segments.src, tagged_src)
         for seg in aligned_segments.src:
             if seg.type == SegmentType.TAG:
                 tagged_src.append(TagSegment.from_string(seg.string))
@@ -430,8 +494,6 @@ class TagReinserter:
 
         return aligned_segments
 
-
-
 class MarkupTranslator:
     def __init__(self, translator: Translator, aligner: Aligner, tokenizer: Tokenizer):
         self.translator = translator
@@ -464,46 +526,50 @@ class MarkupTranslator:
         src_segments = SegmentedText.from_string(src)
         src_segments = src_segments.tokenize(self.tokenizer)
 
-        # src_lines = src.splitlines()
-        print(":: src segments before translation:")
-        src_segments.debug_print()
+        # print(":: src segments before translation:")
+        # src_segments.debug_print()
 
-        src_for_translation, src_to_src_for_translation_alignment = src_segments.translation_view()
-        # src_to_src_for_translation = AlignedSegments(src, src_for_translation, src_to_src_for_translation_alignment)
-        print()
-        print(":: translation view on src segments:")
-        src_for_translation.debug_print()
-        print(src_to_src_for_translation_alignment)
+        src_for_translation, src_segments_to_src_for_translation = src_segments.translation_view()
 
-
-        print()
         print("TRANSLATION")
         src_sentences, tgt_sentences = self.translator.translate(str(src_for_translation))
         print()
         print(":: src sentences")
         src_sentences_segments = SegmentedText.from_sentences(src_sentences)
         src_sentences_segments = src_sentences_segments.tokenize(self.tokenizer)
-        src_sentences_segments.debug_print()
-        src_for_alignment, _ = src_sentences_segments.alignment_view()
+        # prepare source sentences for word alignment
+        src_tokens, src_sentences_to_src_tokens = src_sentences_segments.alignment_view()
 
-        src_for_alignment.debug_print()
-        # print(src_to_src_for_alignment_alignment)
+        # recover the sentence segmentation from src_sentences
+        src_for_translation_to_src_sentences = AlignedSegments(src_for_translation, src_sentences_segments)
+        src_for_translation_to_src_sentences.debug_print()
+        src_for_translation_to_src_sentences.recover_alignment()
+        src_for_translation_to_src_sentences.debug_print()
 
         print(":: tgt sentences")
-        tgt_segments = SegmentedText.from_sentences(tgt_sentences)
-        tgt_segments = tgt_segments.tokenize(self.tokenizer)
-        tgt_segments.debug_print()
-
-        tgt_for_alignment, _ = tgt_segments.alignment_view()
-        tgt_for_alignment.debug_print()
-
+        tgt_sentences_segments = SegmentedText.from_sentences(tgt_sentences)
+        tgt_sentences_segments = tgt_sentences_segments.tokenize(self.tokenizer)
+        # prepare target sentences for word alignment
+        tgt_tokens, tgt_sentences_to_tgt_tokens = tgt_sentences_segments.alignment_view()
+        tgt_tokens_to_tgt_sentences = tgt_sentences_to_tgt_tokens.swap_sides()
 
         print("ALIGNMENT")
-        src_to_tgt_alignment = self.align_segments(src_for_alignment, tgt_for_alignment)
-        src_to_tgt_alignment.debug_print()
+        src_tokens_to_tgt_tokens_alignment = self.align_segments(src_tokens, tgt_tokens)
 
-        print(":: src to tgt alignment")
+        # and now, mother of all compositions
+        src_segments_to_tgt_sentences = \
+            src_segments_to_src_for_translation \
+            .compose(src_for_translation_to_src_sentences) \
+            .compose(src_sentences_to_src_tokens) \
+            .compose(src_tokens_to_tgt_tokens_alignment) \
+            .compose(tgt_tokens_to_tgt_sentences)
 
-        # print([self.tokenizer(sent) for sent in src_sentences])
+        src_segments_to_tgt_sentences.debug_print()
+
+        TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
+
+        src_segments_to_tgt_sentences.debug_print()
+
+        # tgt_sentences = list(src_segments_to_tgt_sentences.split_sentences())
 
         return "\n".join(tgt_sentences)
