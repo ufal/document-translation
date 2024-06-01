@@ -5,7 +5,7 @@ import logging
 
 import mosestokenizer as moses # type: ignore
 
-from translate_markup import Aligner, MarkupTranslator, SegmentedText, Alignment, AlignedSegments, TagReinserter, SegmentType, Tokenizer, Translator
+from translate_markup import Aligner, MarkupTranslator, SegmentedText, Alignment, AlignedSegments, TagReinserter, WhitespaceSegment, Tokenizer, Translator
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -36,7 +36,7 @@ class TagReinserterTester(unittest.TestCase):
             "který"," ","pracuje"," ","<g id='4'>","v"," ","bankovním"," ","sektoru","</g>",","," ",
             "<g id='5'>","se"," ","v"," ","říjnu"," ","žení","</g>",".","</g>"
         ])
-        src = SegmentedText(filter(lambda x: x.type != SegmentType.WHITESPACE, src))
+        src = SegmentedText(filter(lambda x: not isinstance(x, WhitespaceSegment), src))
         # tgt = SegmentedText.from_string_list(["A"," ","friend"," ","of"," ","mine"," ","who"," ","works"," ","in"," ","banking"," ","is"," ","getting"," ","married"," ","in"," ","October","."])
         tgt = SegmentedText.from_string("A friend of mine who works in banking is getting married in October .")
         alignment = Alignment([(2,6), (4,2), (8,8), (9,10), (11,12),(12,14),(13,14),(17,22),(19,24),(20,18),(20,20),(22,26)])

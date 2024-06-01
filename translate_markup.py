@@ -22,82 +22,104 @@ class Tokenizer:
     def tokenize(self, string: str) -> List[str]:
         raise NotImplementedError
 
-# TODO (low priority): it makes more sense to subclass Segment instead of using SegmentType
-class SegmentType(Enum):
-    TEXT = 0
-    TAG = 1
-    WHITESPACE = 2
-    SENTENCE_SEP = 3
-
-class Segment(object):
-    # TODO (low priority): we repeat code here, this should be probably moved into SegmentedText.from_string
-    tag_pattern = r'<\/?(g|x|bx|ex|lb|mrk).*?>'
-    tag_regex = re.compile(tag_pattern)
-    whitespace_regex = re.compile(r'\s+')
-
-    def __init__(self, string: str, type: SegmentType):
-        self.string = string
-        self.type = type
-    
-    @classmethod
-    def from_string(cls, string: str):
-        if cls.tag_regex.match(string):
-            return cls(string, SegmentType.TAG)
-        if cls.whitespace_regex.match(string):
-            return cls(string, SegmentType.WHITESPACE)
-        return cls(string, SegmentType.TEXT)
-
+class Segment(str):
+    def __new__(cls, string: str) -> Self:
+        instance = super().__new__(cls, string)
+        return instance
     def debug_color(self, string: str) -> str:
-        if self.type == SegmentType.TAG:
-            return colored(string, "black", "on_cyan", attrs=["bold"])
-        if self.type == SegmentType.WHITESPACE:
-            return colored(string, "white", "on_blue")
-        if self.type == SegmentType.SENTENCE_SEP:
-            return colored(string, "black", "on_red")
+        raise NotImplementedError
+    def debug_str(self) -> str:
+        return self.debug_color(self)
+    def debug_len(self) -> int:
+        return len(self)
+
+class TextSegment(Segment):
+    def debug_color(self, string: str) -> str:
         return colored(string, "black", "on_white")
 
-    def __len__(self) -> int:
-        return len(self.string)
-    
-    def __str__(self) -> str:
-        return self.string
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, Segment):
-            return self.string == other.string and self.type == other.type
+class TagSegment(Segment):
+    def __init__(self, string: str):
+        if string.startswith("</"):
+            match = re.search(r'</(\w+)>', string)
+            if match:
+                self.tag = match.group(1)
+            else:
+                raise ValueError("tag name not found in string: " + string)
         else:
-            return False
+            # TODO (low priority): could be merged
+            match_tag = re.search(r'<(\w+)', string)
 
+            # warning: also matches wrongly id="1' but that is not a problem
+            match_id = re.search(r'id=("|\')(\d+)("|\')', string)
+            if match_tag:
+                self.tag = match_tag.group(1)
+            else:
+                raise ValueError("tag name not found in string: " + string)
+            if match_id:
+                self.id = int(match_id.group(2))
+            else:
+                raise ValueError("id attribute not found in string: " + string)
+
+        self.id = 0
+    def debug_color(self, string: str) -> str:
+        return colored(string, "black", "on_cyan", attrs=["bold"])
+
+class PairedTagSegment(TagSegment):
+    def __init__(self, string: str) -> None:
+        super().__init__(string)
+        if string == '</g>':
+            self.opening_tag = False
+        elif string.startswith('<g'):
+            self.opening_tag = True
+        else:
+            raise ValueError(f"Not a PairedTagSegment string: {string}")
+
+        self.opening_tag = True
+
+class WhitespaceSegment(Segment):
+    def debug_color(self, string: str) -> str:
+        return colored(string, "white", "on_blue")
     def debug_str(self) -> str:
-        string = repr(self.string) if self.whitespace_regex.match(self.string) else self.string
-        return self.debug_color(string)
-
+        return self.debug_color(repr(self))
     def debug_len(self) -> int:
-        return len(repr(self.string)) if self.whitespace_regex.match(self.string) else len(self.string)
+        return len(repr(self))
+
+class SegmentFactory:
+    paired_tag_pattern = r'</?g.*?>'
+    paired_tag_regex = re.compile(paired_tag_pattern)
+    tag_pattern = r'</?(x|bx|ex|lb|mrk).*?>'
+    tag_regex = re.compile(tag_pattern)
+    whitespace_regex = re.compile(r'\s+')
+    @classmethod
+    def from_string(cls, string: str) -> Segment:
+        if cls.paired_tag_regex.match(string):
+            return PairedTagSegment(string)
+        elif cls.tag_regex.match(string):
+            return TagSegment(string)
+        elif cls.whitespace_regex.match(string):
+            return WhitespaceSegment(string)
+        else:
+            return TextSegment(string)
 
 class SentenceSeparator(Segment):
-    def __init__(self):
-        super().__init__("", SegmentType.SENTENCE_SEP)
-
-    def debug_str(self) -> str:
+    def __new__(cls):
+        instance = super().__new__(cls, "")
+        return instance
+    def debug_color(self, string: str) -> str:
+        return colored(string, "black", "on_red")
+    def debug_str(self):
         return self.debug_color("||")
-
     def debug_len(self) -> int:
         return 2
 
 class JoinedSegment(Segment):
+    def __new__(cls, segments: List[Segment]):
+        instance = super().__new__(cls, ''.join(str(x) for x in segments))
+        return instance
     def __init__(self, segments: List[Segment]):
         self.segments = segments
-    
-    def __len__(self) -> int:
-        return sum(len(s) for s in self.segments)
-    
     def debug_color(self, string: str) -> str:
         return colored(string, "black", "on_yellow", attrs=["underline"])
-    
-    def __str__(self) -> str:
-        return ''.join(str(x) for x in self.segments)
-        
     def debug_str(self) -> str:
         return ''.join(colored(x.debug_str(), attrs=["underline"]) for x in self.segments)
 
@@ -106,10 +128,7 @@ class SegmentedText(list[Segment]):
     A text that has been split into segments of text, tags and whitespace.
     The main assumption is that joining the segments will yield the original text.
     """
-    tag_pattern = r'<\/?(g|x|bx|ex|lb|mrk).*?>'
-    tag_regex = re.compile(tag_pattern)
-    whitespace_regex = re.compile(r'\s+')
-    segments_regex = re.compile(r'('+tag_pattern+r'|\s+|[^<\s]+|[^>\s]+)')
+    segments_regex = re.compile(r'(</?(g|x|bx|ex|lb|mrk).*?>|\s+|[^<\s]+|[^>\s]+)')
 
     def __init__(self, iterable: Optional[Iterable[Segment]] = None):
         if iterable is None:
@@ -119,12 +138,13 @@ class SegmentedText(list[Segment]):
     @classmethod
     def from_string(cls, string: str):
         segment_strings = cls.segments_regex.findall(string)
-        segment_strings = map(lambda x: x[0], segment_strings)
-        return cls([Segment.from_string(s) for s in segment_strings])
+        segment_strings = list(map(lambda x: x[0], segment_strings))
+        assert "".join(segment_strings) == string
+        return cls(SegmentFactory.from_string(s) for s in segment_strings)
     
     @classmethod
     def from_string_list(cls, strings: List[str]):
-        return cls([Segment.from_string(s) for s in strings])
+        return cls(SegmentFactory.from_string(s) for s in strings)
     
     @classmethod
     def from_sentences(cls, sentences: List[str]):
@@ -138,11 +158,11 @@ class SegmentedText(list[Segment]):
         # TODO (low priority): new_segments could be SegmentedText
         new_segments: list[Segment] = []
         for seg in self:
-            if seg.type == SegmentType.TEXT:
+            if isinstance(seg, TextSegment):
                 tokens = tokenizer.tokenize(str(seg))
                 if len(tokens) > 1:
                     for tok in tokens:
-                        new_segments.append(Segment(tok, SegmentType.TEXT))
+                        new_segments.append(TextSegment(tok))
                 else:
                     new_segments.append(seg)
             else:
@@ -150,7 +170,7 @@ class SegmentedText(list[Segment]):
         return SegmentedText(new_segments)
     
     def __str__(self) -> str:
-        return ''.join(str(x) for x in self)
+        return ''.join(x for x in self)
 
     def debug_str(self) -> str:
         return ''.join(x.debug_str() for x in self)
@@ -174,27 +194,22 @@ class SegmentedText(list[Segment]):
         tgt = SegmentedText()
         alignment = Alignment()
         for i, s in enumerate(self):
-            if s.type == SegmentType.TAG:
+            if isinstance(s, TagSegment):
                 continue
-            elif s.type == SegmentType.WHITESPACE:
-                normalized_whitespace = re.sub(r'[^\n]', ' ', s.string)
-                tgt.append(Segment(normalized_whitespace, SegmentType.WHITESPACE))
+            elif isinstance(s, WhitespaceSegment):
+                normalized_whitespace = re.sub(r'[^\n]', ' ', s)
+                tgt.append(WhitespaceSegment(normalized_whitespace))
                 alignment.mapping.append((i, len(tgt) - 1))
             else:
                 tgt.append(s)
                 alignment.mapping.append((i, len(tgt) - 1))
         return tgt, AlignedSegments(self, tgt, alignment)
     
-    # def iter_characters(self):
-    #     for i, seg in enumerate(self):
-    #         for j, c in enumerate(seg.string):
-    #             yield i, j, c
-
     def alignment_view(self):
         tgt = SegmentedText()
         alignment = Alignment()
         for i, s in enumerate(self):
-            if s.type == SegmentType.TEXT or s.type == SegmentType.SENTENCE_SEP:
+            if isinstance(s, TextSegment) or isinstance(s, SentenceSeparator):
                 tgt.append(s)
                 alignment.mapping.append((i, len(tgt) - 1))
         return tgt, AlignedSegments(self, tgt, alignment)
@@ -202,7 +217,7 @@ class SegmentedText(list[Segment]):
     def split_sentences(self):
         i = 0
         for j, seg in enumerate(self):
-            if seg.type == SegmentType.SENTENCE_SEP:
+            if isinstance(seg, SentenceSeparator):
                 # TODO (low priority): why self[i:j] does not return SegmentedText right away?
                 yield SegmentedText(self[i:j])
                 i = j + 1
@@ -298,7 +313,7 @@ class AlignedSegments:
         for i, seg_tgt in enumerate(self.tgt):
             print(i, seg_tgt.debug_str())
             # skip sentence separators
-            if seg_tgt.type == SegmentType.SENTENCE_SEP:
+            if isinstance(seg_tgt, SentenceSeparator):
                 continue
             while True:
                 j, seg_src = next(src_iter)
@@ -308,7 +323,7 @@ class AlignedSegments:
                     break
                 # if not found immediately do not continue 
                 # searching for whitespace, it might be missing
-                if seg_tgt == SegmentType.WHITESPACE:
+                if isinstance(seg_tgt, WhitespaceSegment):
                     break
 
         # assume that src contains extra elements and (src - extra) == tgt
@@ -407,34 +422,15 @@ class TagReinserter:
         Segments that are not aligned are free to be tagged or untagged.
         Segments in `src` that are tagged should be tagged in `tgt`.
         """
-        class TaggedSegment(Segment):
-            def __init__(self, string: str, type: SegmentType, tags: Set[int]):
-                super().__init__(string, type)
-                self.tags = tags
-            @classmethod
-            def from_segment(cls, segment: Segment):
-                return cls(segment.string, segment.type, set())
-            def __str__(self) -> str:
-                return f"<TaggedSegment({repr(self.string)}, {self.type}, {self.tags})>"
-
-        class TagSegment(Segment):
-            def __init__(self, string: str, type: SegmentType, tag_id: int, opening_tag: bool):
-                super().__init__(string, type)
-                self.tag_id = tag_id
-                self.opening_tag = opening_tag
-            @classmethod
-            def from_string(cls, string: str):
-                if string == '</g>':
-                    return cls(string, SegmentType.TAG, -1, False)
-                elif string.startswith('<g'):
-                    match = re.search(r'id=("|\')(\d+)("|\')', string) # warning: also matches wrongly id="1' but that is not a problem
-                    if match:
-                        tag_id = int(match.group(2))
-                        return cls(string, SegmentType.TAG, tag_id, True)
-                    else:
-                        raise ValueError("tag id attribute not found in string: " + string)
-                else:
-                    raise ValueError(f"Not a TagSegment string: {string}")
+        # class TaggedSegment(Segment):
+        #     def __init__(self, string: str, type: SegmentType, tags: Set[int]):
+        #         super().__init__(string, type)
+        #         self.tags = tags
+        #     @classmethod
+        #     def from_segment(cls, segment: Segment):
+        #         return cls(segment.string, segment.type, set())
+        #     def __str__(self) -> str:
+        #         return f"<TaggedSegment({repr(self.string)}, {self.type}, {self.tags})>"
 
         tagged_src: List[Segment] = []
         # src_to_tagged = AlignedSegments(aligned_segments.src, aligned_segments.src)
@@ -442,8 +438,8 @@ class TagReinserter:
         # src_to_tagged.filter_tgt(lambda seg: )
         # src_to_tagged = AlignedSegments(aligned_segments.src, tagged_src)
         for seg in aligned_segments.src:
-            if seg.type == SegmentType.TAG:
-                tagged_src.append(TagSegment.from_string(seg.string))
+            if isinstance(seg, TagSegment):
+                tagged_src.append(seg)
             else:
                 tagged_src.append(TaggedSegment.from_segment(seg))
         tag_stack: List[int] = []
@@ -481,8 +477,8 @@ class TagReinserter:
             # print(tag, tagged_indices)
             min_index = min(tagged_indices)
             max_index = max(tagged_indices)
-            tagged_tgt.insert(min_index, TaggedSegment("<g>", SegmentType.TAG, set()))
-            tagged_tgt.insert(max_index+2, TaggedSegment("</g>", SegmentType.TAG, set()))
+            # tagged_tgt.insert(min_index, TaggedSegment("<g>", SegmentType.TAG, set()))
+            # tagged_tgt.insert(max_index+2, TaggedSegment("</g>", SegmentType.TAG, set()))
 
             aligned_segments.insert_segment(min_index, unique_tags_begins[tag])
             aligned_segments.insert_segment(max_index+2, unique_tags_ends[tag])
@@ -568,7 +564,7 @@ class MarkupTranslator:
 
         TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
 
-        src_segments_to_tgt_sentences.debug_print()
+        # src_segments_to_tgt_sentences.debug_print()
 
         # tgt_sentences = list(src_segments_to_tgt_sentences.split_sentences())
 
