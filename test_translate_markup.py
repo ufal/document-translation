@@ -97,10 +97,11 @@ class MarkupTranslatorTester(unittest.TestCase):
         # self.assertEqual(tgt, tgt_expected)
 
     def test_simple(self):
-        src = "Ahoj <g id='1'>světe</g>!<ex id='2'/> Jak se máš?\n\n<bx id='3'/>Mám se fajn.\n\n"
-        tgt_expected = "Hello <g id='1'>world</g>!<ex id='2'/> How are you?\n\n<bx id='3'/>I am fine.\n\n"
+        src = "Ahoj <g id='1'>světe</g>!<ex id='2'/> Jak se máš?\n\n<bx id='3'/>Mám se <g id='4'>fajn</g>.\n\n"
+        tgt_expected = "Hello <g id='1'>world</g>!<ex id='2'/> How are you?\n\n<bx id='3'/>I am <g id='4'>fine</g>.\n\n"
         tgt = self.markup_translator.translate(src)
         # self.assertEqual(tgt, tgt_expected)
+    # TODO: otestovat vnořené tagy, taky jestli se zachovává jejich pořadí
 
 if __name__ == "__main__":
     unittest.main()
