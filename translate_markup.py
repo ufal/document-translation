@@ -45,20 +45,12 @@ class TagSegment(Segment):
             else:
                 raise ValueError("tag name not found in string: " + string)
         else:
-            # TODO (low priority): could be merged
             match_tag = re.search(r'<(\w+)', string)
 
-            # warning: also matches wrongly id="1' but that is not a problem
-            match_id = re.search(r'id=("|\')(\d+)("|\')', string)
             if match_tag:
                 self.tag = match_tag.group(1)
             else:
                 raise ValueError("tag name not found in string: " + string)
-            if match_id:
-                self.id = int(match_id.group(2))
-            else:
-                self.id = -1
-                logger.warning("id attribute not found in string: " + string)
     def debug_color(self, string: str) -> str:
         return colored(string, "black", "on_cyan", attrs=["bold"])
 
@@ -352,7 +344,7 @@ class TagReinserter:
             if aligned_segments.alignment.get_src(i) != []:
                 return False
             if isinstance(segment, PairedTagSegment):
-                logger.warning(f"Found unaligned PairedTagSegment {segment}, maybe forgot to run TagReinserter.reinsert_tags?")
+                logger.warning(f"Found unaligned PairedTagSegment {segment} on index {i}, maybe forgot to run TagReinserter.reinsert_tags?")
             # reinsert unaligned tags (should be self-closing tags only if the previous step was TagReinserter.reinsert_tags)
             if isinstance(segment, TagSegment):
                 return True
@@ -413,51 +405,52 @@ class TagReinserter:
         Segments in `src` that are tagged should be tagged in `tgt`.
         """
         # TODO: get rid of integer ids and replace with object references. It turns out ids may not be unique
-        tag_stack: List[int] = []
-        unique_opening_tags: Dict[int, Tuple[int, PairedTagSegment]] = dict()
-        unique_closing_tags: Dict[int, Tuple[int, PairedTagSegment]] = dict()
-        tag_id_to_tgt_indices: defaultdict[int, Set[int]] = defaultdict(set)
+        tag_stack: List[Segment] = []
+        unique_opening_tags: Dict[Segment, Tuple[int, PairedTagSegment]] = dict()
+        unique_closing_tags: Dict[Segment, Tuple[int, PairedTagSegment]] = dict()
+        tag_to_tgt_indices: defaultdict[Segment, Set[int]] = defaultdict(set)
 
         for i, seg in enumerate(aligned_segments.src):
             if isinstance(seg, PairedTagSegment):
                 if seg.opening_tag:
-                    tag_stack.append(seg.id)
-                    unique_opening_tags[seg.id] = (i, seg)
+                    tag_stack.append(seg)
+                    unique_opening_tags[seg] = (i, seg)
                 else:
-                    tag_id = tag_stack.pop()
-                    unique_closing_tags[tag_id] = (i, seg)
+                    tag = tag_stack.pop()
+                    unique_closing_tags[tag] = (i, seg)
             else:
                 tgt_indices = aligned_segments.alignment.get_src(i)
                 if tgt_indices != []:
                     for tgt_index in tgt_indices:
-                        for tag_id in tag_stack:
-                            tag_id_to_tgt_indices[tag_id].add(tgt_index)
+                        for tag in tag_stack:
+                            tag_to_tgt_indices[tag].add(tgt_index)
         if tag_stack:
             raise ValueError(f"tag_stack is not empty: {tag_stack}")
 
         assert set(unique_opening_tags.keys()) == set(unique_closing_tags.keys())
         
-        for tag_id in unique_opening_tags.keys():
-            tagged_indices = tag_id_to_tgt_indices[tag_id]
+        for tag in unique_opening_tags.keys():
+            tagged_indices = tag_to_tgt_indices[tag]
             min_index = min(tagged_indices)
             max_index = max(tagged_indices)
-            opening_src_index, opening_tag = unique_opening_tags[tag_id]
-            closing_src_index, closing_tag = unique_closing_tags[tag_id]
+            opening_src_index, opening_tag = unique_opening_tags[tag]
+            assert opening_tag == tag
+            closing_src_index, closing_tag = unique_closing_tags[tag]
             aligned_segments.insert_segment(min_index, opening_tag)
             aligned_segments.insert_segment(max_index+2, closing_tag)
             aligned_segments.alignment.mapping.append((opening_src_index, min_index))
             aligned_segments.alignment.mapping.append((closing_src_index, max_index+2))
             # fix indices after insertion
-            for tag_id_2 in unique_opening_tags.keys():
+            for tag_2 in unique_opening_tags.keys():
                 fixed_indices: Set[int] = set()
-                for i in tag_id_to_tgt_indices[tag_id_2]:
+                for i in tag_to_tgt_indices[tag_2]:
                     if i > max_index:
                         fixed_indices.add(i+2)
                     elif i > min_index:
                         fixed_indices.add(i+1)
                     else:
                         fixed_indices.add(i)
-                tag_id_to_tgt_indices[tag_id_2] = fixed_indices
+                tag_to_tgt_indices[tag_2] = fixed_indices
                     
 
         return aligned_segments
