@@ -2,7 +2,6 @@ from collections import defaultdict
 from functools import cached_property
 from typing import Callable, Dict, Iterable, List, Optional, Self, Set, Tuple
 import re
-from enum import Enum
 import logging
 
 from termcolor import colored
@@ -58,7 +57,8 @@ class TagSegment(Segment):
             if match_id:
                 self.id = int(match_id.group(2))
             else:
-                raise ValueError("id attribute not found in string: " + string)
+                self.id = -1
+                logger.warning("id attribute not found in string: " + string)
     def debug_color(self, string: str) -> str:
         return colored(string, "black", "on_cyan", attrs=["bold"])
 
@@ -352,7 +352,7 @@ class TagReinserter:
             if aligned_segments.alignment.get_src(i) != []:
                 return False
             if isinstance(segment, PairedTagSegment):
-                logger.warn(f"Found unaligned PairedTagSegment {segment}, maybe forgot to run TagReinserter.reinsert_tags?")
+                logger.warning(f"Found unaligned PairedTagSegment {segment}, maybe forgot to run TagReinserter.reinsert_tags?")
             # reinsert unaligned tags (should be self-closing tags only if the previous step was TagReinserter.reinsert_tags)
             if isinstance(segment, TagSegment):
                 return True
@@ -390,7 +390,7 @@ class TagReinserter:
                 else:
                     # no segment in tgt is aligned to this segment from src
                     # we insert the current segment at the end
-                    logger.warn("no segment in tgt is aligned to this segment from src")
+                    logger.warning("no segment in tgt is aligned to this segment from src")
                     aligned_segments.insert_segment(len(aligned_segments.tgt), seg)
                     # TODO: find the best place to insert the segment by counting 
                     #       the number of aligned segments before and after the reinserted segments
@@ -412,6 +412,7 @@ class TagReinserter:
         Segments that are not aligned are free to be tagged or untagged.
         Segments in `src` that are tagged should be tagged in `tgt`.
         """
+        # TODO: get rid of integer ids and replace with object references. It turns out ids may not be unique
         tag_stack: List[int] = []
         unique_opening_tags: Dict[int, Tuple[int, PairedTagSegment]] = dict()
         unique_closing_tags: Dict[int, Tuple[int, PairedTagSegment]] = dict()
@@ -495,6 +496,8 @@ class MarkupTranslator:
 
         src_for_translation, src_segments_to_src_for_translation = src_segments.translation_view()
 
+        src_segments_to_src_for_translation.debug_print()
+
         print("TRANSLATION")
         src_sentences, tgt_sentences = self.translator.translate(str(src_for_translation))
         # print()
@@ -543,3 +546,114 @@ class MarkupTranslator:
         src_segments_to_tgt_sentences.debug_print()
 
         return str(src_segments_to_tgt_sentences.tgt)
+
+from sentence_splitter import SentenceSplitter
+import requests
+class LindatTranslator:
+    def __init__(self, src_lang: str, tgt_lang: str):
+        self.src_lang = src_lang
+        self.tgt_lang = tgt_lang
+        self.splitter = SentenceSplitter(language=src_lang)
+    def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
+        src_lang = self.src_lang
+        tgt_lang = self.tgt_lang
+        assert src_lang+"-"+tgt_lang in [
+            "en-cs","cs-en","en-hi","en-fr","fr-en","en-de","de-en","ru-en","en-ru","en-pl","pl-en","uk-cs","cs-uk","ru-cs","cs-ru"
+        ]
+        url = f"https://lindat.mff.cuni.cz/services/translation/api/v2/models/{src_lang}-{tgt_lang}"
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        data = {
+                "src": src_lang,
+                "tgt": tgt_lang,
+                "input_text": input_text,
+        }
+        def _sentence_split(text: str):
+            output: List[str] = []
+            for line in re.split(r"(\n+)", text):
+                if not line:
+                    continue
+                if line.startswith("\n") and output:
+                    output[-1] += line
+                else:
+                    output.extend(self.splitter.split(line))
+            return output
+        print(repr(input_text))
+        print("====")
+        src_sentences = _sentence_split(input_text)
+        print(src_sentences)
+        print("====")
+        print()
+        tgt_sentences = requests.post(url, headers=headers, data=data).json()
+        print(tgt_sentences)
+        return src_sentences, tgt_sentences
+
+class LindatAligner:
+    def __init__(self, src_lang: str, tgt_lang: str):
+        self.src_lang = src_lang
+        self.tgt_lang = tgt_lang
+    def align(self, src_batch: List[List[str]], tgt_batch: List[List[str]]) -> List[List[Tuple[int, int]]]:
+        src_lang = self.src_lang
+        tgt_lang = self.tgt_lang
+
+        url = f'https://lindat.cz/services/text-aligner/align/{src_lang}-{tgt_lang}'
+        headers = {
+            'Content-Type': 'application/json',
+        }
+        data = {
+            'src_tokens': src_batch,
+            'trg_tokens': tgt_batch,
+        }
+        tgt_lang = self.tgt_lang
+
+
+        response = requests.post(url, headers=headers, json=data)
+
+        if response.status_code == 200:
+            alignment = response.json()["alignment"]
+            print(alignment)
+            return alignment
+        else:
+            print(f"Error: {response.status_code}", file=sys.stderr)
+            print(response.text, file=sys.stderr)
+            raise Exception
+
+class RegexTokenizer:
+    def __init__(self):
+        ACCENT = chr(769)
+        self.WORD_TOKENIZATION_RULES = re.compile(r"""
+        [\w""" + ACCENT + """]+://(?:[a-zA-Z]|[0-9]|[$-_@.&+])+
+        |[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+.[a-zA-Z0-9-.]+
+        |[0-9]+-[а-яА-ЯіїІЇ'’`""" + ACCENT + """]+
+        |[+-]?[0-9](?:[0-9,.-]*[0-9])?
+        |[\w""" + ACCENT + """](?:[\w'’`-""" + ACCENT + """]?[\w""" + ACCENT + """]+)*
+        |[\w""" + ACCENT + """].(?:\[\w""" + ACCENT + """].)+[\w""" + ACCENT + """]?
+        |[^\s]
+        |[.!?]+
+        |-+
+        """, re.X | re.U)
+
+    def tokenize(self, string: str) -> List[str]:
+        return re.findall(self.WORD_TOKENIZATION_RULES, string)
+
+import argparse
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Translate texts line by line')
+    parser.add_argument('input_file', help='Input text file with markup')
+    parser.add_argument('src_lang', help='Source language')
+    parser.add_argument('tgt_lang', help='Target language')
+    parser.add_argument('output_file', help='Output text file')
+    args = parser.parse_args()
+
+    translator = LindatTranslator(args.src_lang, args.tgt_lang)
+    aligner = LindatAligner(args.src_lang, args.tgt_lang)
+    tokenizer = RegexTokenizer()
+    mt = MarkupTranslator(translator, aligner, tokenizer)
+
+    with open(args.input_file) as f_in, open(args.output_file, "w") as f_out:
+        input_text = f_in.read()
+        print(repr(input_text))
+        output = mt.translate(input_text)
+        print(repr(output))
