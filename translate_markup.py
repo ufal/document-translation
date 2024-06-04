@@ -382,10 +382,30 @@ class TagReinserter:
                 else:
                     # no segment in tgt is aligned to this segment from src
                     # we insert the current segment at the end
-                    logger.warning("no segment in tgt is aligned to this segment from src")
+                    logger.warning(f"no segment in tgt is aligned to this segment {i} {seg} from src")
                     aligned_segments.insert_segment(len(aligned_segments.tgt), seg)
                     # TODO: find the best place to insert the segment by counting 
                     #       the number of aligned segments before and after the reinserted segments
+                    tgt_indices_left: Set[int] = set()
+                    tgt_indices_right: Set[int] = set()
+                    for j in range(0, i):
+                        tgt_indices_left.update(aligned_segments.alignment.get_src(j))
+                    for j in range(i+1, len(aligned_segments.src)):
+                        tgt_indices_right.update(aligned_segments.alignment.get_src(j))
+                    print(tgt_indices_left, tgt_indices_right)
+                    if max(tgt_indices_left) <= min(tgt_indices_right):
+                        # simple case
+                        index = max(tgt_indices_left) + 1
+                        aligned_segments.insert_segment(index, seg)
+                    else:
+                        logger.error("DID NOT FIND PLACE TO INSERT SEGMENT")
+                        # TODO: implement a more sophisticated way to insert the segment
+                        index = max(tgt_indices_left) + 1
+                        aligned_segments.insert_segment(index, seg)
+                        # aligned_segments.insert_segment(len(aligned_segments.tgt), seg)
+                    # for j in range(0, len(aligned_segments.tgt)):
+                    #     errors = 
+
 
         aligned_segments.flatten_segments()
 
