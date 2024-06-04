@@ -274,8 +274,8 @@ class AlignedSegments:
         fst = self.src.pop(index)
         snd = self.src.pop(index)
         if isinstance(fst, JoinedSegment):
-            fst.segments.append(snd)
-            self.src.insert(index, fst)
+            new_seg = JoinedSegment(fst.segments + [snd])
+            self.src.insert(index, new_seg)
         else:
             new_seg = JoinedSegment([fst, snd])
             self.src.insert(index, new_seg)
