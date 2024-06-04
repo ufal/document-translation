@@ -188,8 +188,10 @@ class SegmentedText(list[Segment]):
             if isinstance(s, TagSegment):
                 continue
             elif isinstance(s, WhitespaceSegment):
-                normalized_whitespace = re.sub(r'[^\n]', ' ', s)
-                tgt.append(WhitespaceSegment(normalized_whitespace))
+                if s == "\n" or s == " ":
+                    tgt.append(s)
+                else:
+                    tgt.append(WhitespaceSegment(" "))
                 alignment.mapping.append((i, len(tgt) - 1))
             else:
                 tgt.append(s)
@@ -359,7 +361,7 @@ class TagReinserter:
             if isinstance(segment, TagSegment):
                 return True
             # reinsert whitespace if it is not a simple space and it is not only newlines
-            if isinstance(segment, WhitespaceSegment) and (re.match(r"( |\n+)", segment) is None):
+            if isinstance(segment, WhitespaceSegment) and segment != " " and segment != "\n":
                 return True
             return False 
         i = 0
@@ -393,7 +395,6 @@ class TagReinserter:
                     # no segment in tgt is aligned to this segment from src
                     # we insert the current segment at the end
                     logger.warning(f"no segment in tgt is aligned to this segment {i} {seg} from src")
-                    aligned_segments.insert_segment(len(aligned_segments.tgt), seg)
                     # TODO: find the best place to insert the segment by counting 
                     #       the number of aligned segments before and after the reinserted segments
                     tgt_indices_left: Set[int] = set()
@@ -403,9 +404,11 @@ class TagReinserter:
                     for j in range(i+1, len(aligned_segments.src)):
                         tgt_indices_right.update(aligned_segments.alignment.get_src(j))
                     print(tgt_indices_left, tgt_indices_right)
-                    if max(tgt_indices_left) <= min(tgt_indices_right):
+                    max_tgt_indices_left = max(tgt_indices_left) if tgt_indices_left else 0
+                    min_tgt_indices_right = min(tgt_indices_right) if tgt_indices_right else len(aligned_segments.tgt)
+                    if max_tgt_indices_left <= min_tgt_indices_right:
                         # simple case
-                        index = max(tgt_indices_left) + 1
+                        index = max_tgt_indices_left
                         aligned_segments.insert_segment(index, seg)
                     else:
                         logger.error("DID NOT FIND PLACE TO INSERT SEGMENT")
@@ -461,6 +464,8 @@ class TagReinserter:
         
         for tag in unique_opening_tags.keys():
             tagged_indices = tag_to_tgt_indices[tag]
+            if not tagged_indices:
+                continue
             min_index = min(tagged_indices)
             max_index = max(tagged_indices)
             opening_src_index, opening_tag = unique_opening_tags[tag]
