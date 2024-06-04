@@ -359,8 +359,8 @@ class TagReinserter:
             if aligned_segments.alignment.get_src(i) != []:
                 return False
             if isinstance(segment, PairedTagSegment):
-                logger.warning(f"Found unaligned PairedTagSegment {segment} on index {i}, maybe forgot to run TagReinserter.reinsert_tags?")
-            # reinsert unaligned tags (should be self-closing tags only if the previous step was TagReinserter.reinsert_tags)
+                logger.warning(f"Found unaligned PairedTagSegment {segment} on index {i}!")
+            # reinsert unaligned tags
             if isinstance(segment, TagSegment):
                 return True
             # reinsert whitespace if it is not a simple space and it is not only newlines
@@ -440,17 +440,16 @@ class TagReinserter:
         Segments that are not aligned are free to be tagged or untagged.
         Segments in `src` that are tagged should be tagged in `tgt`.
         """
-        # TODO: get rid of integer ids and replace with object references. It turns out ids may not be unique
-        tag_stack: List[Segment] = []
-        unique_opening_tags: Dict[Segment, Tuple[int, PairedTagSegment]] = dict()
-        unique_closing_tags: Dict[Segment, Tuple[int, PairedTagSegment]] = dict()
-        tag_to_tgt_indices: defaultdict[Segment, Set[int]] = defaultdict(set)
+        tag_stack: List[int] = []
+        unique_opening_tags: Dict[int, Tuple[int, PairedTagSegment]] = dict()
+        unique_closing_tags: Dict[int, Tuple[int, PairedTagSegment]] = dict()
+        tag_to_tgt_indices: defaultdict[int, Set[int]] = defaultdict(set)
 
         for i, seg in enumerate(aligned_segments.src):
             if isinstance(seg, PairedTagSegment):
                 if seg.opening_tag:
-                    tag_stack.append(seg)
-                    unique_opening_tags[seg] = (i, seg)
+                    tag_stack.append(i)
+                    unique_opening_tags[i] = (i, seg)
                 else:
                     tag = tag_stack.pop()
                     unique_closing_tags[tag] = (i, seg)
@@ -472,7 +471,7 @@ class TagReinserter:
             min_index = min(tagged_indices)
             max_index = max(tagged_indices)
             opening_src_index, opening_tag = unique_opening_tags[tag]
-            assert opening_tag == tag
+            assert opening_src_index == tag
             closing_src_index, closing_tag = unique_closing_tags[tag]
             aligned_segments.insert_segment(min_index, opening_tag)
             aligned_segments.insert_segment(max_index+2, closing_tag)
