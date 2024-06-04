@@ -319,8 +319,9 @@ class AlignedSegments:
                     seg_tgt = seg_tgt[len(seg_src):]
                 # if not found immediately do not continue 
                 # searching for whitespace, it might be missing
-                if isinstance(seg_tgt, WhitespaceSegment):
-                    break
+                # if isinstance(seg_tgt, WhitespaceSegment):
+                #     skipped_last_tgt = True
+                #     break
 
     def recover_newline_alignment(self) -> None:
         src_newlines = [i for i, seg in enumerate(self.src) if seg == "\n"]
