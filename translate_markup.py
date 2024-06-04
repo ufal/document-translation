@@ -606,6 +606,11 @@ class LindatTranslator:
             "accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded",
         }
+        num_prefix_newlines = 0
+        if input_text.startswith("\n"):
+            while input_text[num_prefix_newlines] == "\n":
+                num_prefix_newlines += 1
+            input_text = input_text[num_prefix_newlines:]
         data = {
                 "src": src_lang,
                 "tgt": tgt_lang,
@@ -630,13 +635,25 @@ class LindatTranslator:
         print("====")
         print()
         tgt_sentences = requests.post(url, headers=headers, data=data).json()
+        assert len(src_sentences) == len(tgt_sentences)
         if tgt_sentences:
+            # if the line was empty or whitespace-only, then discard any potential translation
+            new_tgt_sentences: List[str] = []
+            for src, tgt in zip(src_sentences, tgt_sentences):
+                if re.match(r"^\s+$", src):
+                    new_tgt_sentences.append(src)
+                else:
+                    new_tgt_sentences.append(tgt)
+            tgt_sentences = new_tgt_sentences
+            # reinsert prefix newlines
+            src_sentences[0] = "\n" * num_prefix_newlines + src_sentences[0]
+            tgt_sentences[0] = "\n" * num_prefix_newlines + tgt_sentences[0]
+            # add spaces after sentence ends
+            tgt_sentences = [tgt_sentence + " " if not tgt_sentence.endswith("\n") else tgt_sentence for tgt_sentence in tgt_sentences]
             # remove final newline
             assert tgt_sentences[-1].endswith("\n")
             tgt_sentences[-1] = tgt_sentences[-1][:-1]
-            # add spaces after sentence ends
-            tgt_sentences = [tgt_sentence + " " if not tgt_sentence.endswith("\n") else tgt_sentence for tgt_sentence in tgt_sentences]
-        print(tgt_sentences)
+        print("")
         return src_sentences, tgt_sentences
 
 import sys
