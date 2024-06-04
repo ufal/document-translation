@@ -312,6 +312,9 @@ class AlignedSegments:
                 if seg_src == seg_tgt:
                     self.alignment.mapping.append((j, i))
                     break
+                if seg_tgt.startswith(seg_src):
+                    self.alignment.mapping.append((j, i))
+                    seg_tgt = seg_tgt[len(seg_src):]
                 # if not found immediately do not continue 
                 # searching for whitespace, it might be missing
                 if isinstance(seg_tgt, WhitespaceSegment):
