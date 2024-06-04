@@ -112,7 +112,8 @@ class JoinedSegment(Segment):
         return colored(string, "black", "on_yellow", attrs=["underline"])
     def debug_str(self) -> str:
         return ''.join(colored(x.debug_str(), attrs=["underline"]) for x in self.segments)
-
+    def debug_len(self) -> int:
+        return sum(x.debug_len() for x in self.segments)
 class SegmentedText(list[Segment]):
     """
     A text that has been split into segments of text, tags and whitespace.
