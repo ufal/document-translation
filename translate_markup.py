@@ -524,6 +524,8 @@ class MarkupTranslator:
 
     def translate(self, src: str) -> str:
         timer_start = perf_counter()
+        # remove non-breakable spaces
+        src = src.replace("\xa0", " ")
         src_segments = SegmentedText.from_string(src)
         src_segments = src_segments.tokenize(self.tokenizer)
 
