@@ -52,7 +52,7 @@ class TagSegment(Segment):
             else:
                 raise ValueError("tag name not found in string: " + string)
     def debug_color(self, string: str) -> str:
-        return colored(string, "black", "on_cyan", attrs=["bold"])
+        return colored(string, "black", "on_magenta", attrs=["bold"])
 
 class PairedTagSegment(TagSegment):
     def __init__(self, string: str) -> None:
@@ -63,6 +63,8 @@ class PairedTagSegment(TagSegment):
             self.opening_tag = True
         else:
             raise ValueError(f"Not a PairedTagSegment string: {string}")
+    def debug_color(self, string: str) -> str:
+        return colored(string, "black", "on_cyan", attrs=["bold"])
 
 class WhitespaceSegment(Segment):
     def debug_color(self, string: str) -> str:
@@ -116,7 +118,7 @@ class SegmentedText(list[Segment]):
     A text that has been split into segments of text, tags and whitespace.
     The main assumption is that joining the segments will yield the original text.
     """
-    segments_regex = re.compile(r'(</?(g|x|bx|ex|lb|mrk).*?>|\s+|[^<\s]+|[^>\s]+)')
+    segments_regex = re.compile(r'(</?(g|x|bx|ex|lb|mrk).*?>|\n|[^\S\n]+|[^<\s]+|[^>\s]+)')
 
     def __init__(self, iterable: Optional[Iterable[Segment]] = None):
         if iterable is None:
@@ -197,7 +199,7 @@ class SegmentedText(list[Segment]):
         tgt = SegmentedText()
         alignment = Alignment()
         for i, s in enumerate(self):
-            if isinstance(s, TextSegment) or isinstance(s, SentenceSeparator):
+            if isinstance(s, TextSegment) or isinstance(s, SentenceSeparator) or s == "\n":
                 tgt.append(s)
                 alignment.mapping.append((i, len(tgt) - 1))
         return tgt, AlignedSegments(self, tgt, alignment)
@@ -311,6 +313,13 @@ class AlignedSegments:
                 # searching for whitespace, it might be missing
                 if isinstance(seg_tgt, WhitespaceSegment):
                     break
+
+    def recover_newline_alignment(self) -> None:
+        src_newlines = [i for i, seg in enumerate(self.src) if seg == "\n"]
+        tgt_newlines = [i for i, seg in enumerate(self.tgt) if seg == "\n"]
+        print(src_newlines, tgt_newlines)
+        assert len(src_newlines) == len(tgt_newlines)
+        self.alignment.mapping.extend(zip(src_newlines, tgt_newlines))
 
     def swap_sides(self) -> "AlignedSegments":
         # TODO (low priority): alignment should be more of a black box
@@ -535,6 +544,7 @@ class MarkupTranslator:
 
         print("ALIGNMENT")
         src_tokens_to_tgt_tokens_alignment = self.align_segments(src_tokens, tgt_tokens)
+        src_tokens_to_tgt_tokens_alignment.recover_newline_alignment()
 
         # and now, mother of all compositions
         src_segments_to_tgt_sentences = \
@@ -593,6 +603,8 @@ class LindatTranslator:
                 else:
                     output.extend(self.splitter.split(line))
             return output
+        print("LINDAT TRANSLATOR HERE")
+        print("input to translator:")
         print(repr(input_text))
         print("====")
         src_sentences = _sentence_split(input_text)
@@ -600,9 +612,13 @@ class LindatTranslator:
         print("====")
         print()
         tgt_sentences = requests.post(url, headers=headers, data=data).json()
+        if tgt_sentences:
+            assert tgt_sentences[-1].endswith("\n")
+            tgt_sentences[-1] = tgt_sentences[-1][:-1]
         print(tgt_sentences)
         return src_sentences, tgt_sentences
 
+import sys
 class LindatAligner:
     def __init__(self, src_lang: str, tgt_lang: str):
         self.src_lang = src_lang
