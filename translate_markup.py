@@ -3,11 +3,13 @@ from functools import cached_property
 from typing import Callable, Dict, Iterable, List, Optional, Self, Set, Tuple
 import re
 import logging
+from time import perf_counter
 
 from termcolor import colored
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 class Translator:
     def translate(self, src: str) -> Tuple[List[str], List[str]]:
@@ -323,7 +325,6 @@ class AlignedSegments:
     def recover_newline_alignment(self) -> None:
         src_newlines = [i for i, seg in enumerate(self.src) if seg == "\n"]
         tgt_newlines = [i for i, seg in enumerate(self.tgt) if seg == "\n"]
-        print(src_newlines, tgt_newlines)
         assert len(src_newlines) == len(tgt_newlines)
         self.alignment.mapping.extend(zip(src_newlines, tgt_newlines))
 
@@ -473,6 +474,7 @@ class TagReinserter:
             opening_src_index, opening_tag = unique_opening_tags[tag]
             assert opening_src_index == tag
             closing_src_index, closing_tag = unique_closing_tags[tag]
+            assert min_index <= max_index
             aligned_segments.insert_segment(min_index, opening_tag)
             aligned_segments.insert_segment(max_index+2, closing_tag)
             aligned_segments.alignment.mapping.append((opening_src_index, min_index))
@@ -483,7 +485,7 @@ class TagReinserter:
                 for i in tag_to_tgt_indices[tag_2]:
                     if i > max_index:
                         fixed_indices.add(i+2)
-                    elif i > min_index:
+                    elif i >= min_index:
                         fixed_indices.add(i+1)
                     else:
                         fixed_indices.add(i)
@@ -521,6 +523,7 @@ class MarkupTranslator:
         return aligned_segments
 
     def translate(self, src: str) -> str:
+        timer_start = perf_counter()
         src_segments = SegmentedText.from_string(src)
         src_segments = src_segments.tokenize(self.tokenizer)
 
@@ -528,8 +531,10 @@ class MarkupTranslator:
 
         src_segments_to_src_for_translation.debug_print()
 
-        print("TRANSLATION")
+        logger.info("TRANSLATION")
+        timer = perf_counter()
         src_sentences, tgt_sentences = self.translator.translate(str(src_for_translation))
+        logger.info(f"Translation took {perf_counter() - timer:.2f} sec")
         # print()
         # print(":: src sentences")
         src_sentences_segments = SegmentedText.from_sentences(src_sentences)
@@ -550,8 +555,10 @@ class MarkupTranslator:
         tgt_tokens, tgt_sentences_to_tgt_tokens = tgt_sentences_segments.alignment_view()
         tgt_tokens_to_tgt_sentences = tgt_sentences_to_tgt_tokens.swap_sides()
 
-        print("ALIGNMENT")
+        logger.info("ALIGNMENT")
+        timer = perf_counter()
         src_tokens_to_tgt_tokens_alignment = self.align_segments(src_tokens, tgt_tokens)
+        logger.info(f"Alignment took {perf_counter() - timer:.2f} seconds")
         src_tokens_to_tgt_tokens_alignment.recover_newline_alignment()
 
         # and now, mother of all compositions
@@ -576,6 +583,7 @@ class MarkupTranslator:
         TagReinserter.reinsert_segments(src_segments_to_tgt_sentences)
         src_segments_to_tgt_sentences.debug_print()
 
+        logger.info(f"Total time {perf_counter() - timer_start:.2f} seconds")
         return str(src_segments_to_tgt_sentences.tgt)
 
 from sentence_splitter import SentenceSplitter
@@ -621,8 +629,11 @@ class LindatTranslator:
         print()
         tgt_sentences = requests.post(url, headers=headers, data=data).json()
         if tgt_sentences:
+            # remove final newline
             assert tgt_sentences[-1].endswith("\n")
             tgt_sentences[-1] = tgt_sentences[-1][:-1]
+            # add spaces after sentence ends
+            tgt_sentences = [tgt_sentence + " " if not tgt_sentence.endswith("\n") else tgt_sentence for tgt_sentence in tgt_sentences]
         print(tgt_sentences)
         return src_sentences, tgt_sentences
 
@@ -694,3 +705,4 @@ if __name__ == "__main__":
         print(repr(input_text))
         output = mt.translate(input_text)
         print(repr(output))
+        f_out.write(output)
