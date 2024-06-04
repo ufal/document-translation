@@ -391,11 +391,13 @@ class TagReinserter:
                     # we insert the current segment before the next segment
                     index = min(aligned_segments.alignment.get_src(i+1))
                     aligned_segments.insert_segment(index, seg)
+                    aligned_segments.alignment.mapping.append((i, index))
                 elif aligned_segments.alignment.get_src(i-1) != []:
                     # the previous segment from src is aligned to a segment in tgt
                     # we insert the current segment after the previous segment
                     index = max(aligned_segments.alignment.get_src(i-1)) + 1
                     aligned_segments.insert_segment(index, seg)
+                    aligned_segments.alignment.mapping.append((i, index))
                 else:
                     # no segment in tgt is aligned to this segment from src
                     # we insert the current segment at the end
@@ -409,20 +411,19 @@ class TagReinserter:
                     for j in range(i+1, len(aligned_segments.src)):
                         tgt_indices_right.update(aligned_segments.alignment.get_src(j))
                     print(tgt_indices_left, tgt_indices_right)
-                    max_tgt_indices_left = max(tgt_indices_left) if tgt_indices_left else 0
+                    max_tgt_indices_left = max(tgt_indices_left) + 1 if tgt_indices_left else 0
                     min_tgt_indices_right = min(tgt_indices_right) if tgt_indices_right else len(aligned_segments.tgt)
                     if max_tgt_indices_left <= min_tgt_indices_right:
                         # simple case
                         index = max_tgt_indices_left
                         aligned_segments.insert_segment(index, seg)
+                        aligned_segments.alignment.mapping.append((i, index))
                     else:
                         logger.error("DID NOT FIND PLACE TO INSERT SEGMENT")
                         # TODO: implement a more sophisticated way to insert the segment
-                        index = max(tgt_indices_left) + 1
+                        index = max_tgt_indices_left
                         aligned_segments.insert_segment(index, seg)
-                        # aligned_segments.insert_segment(len(aligned_segments.tgt), seg)
-                    # for j in range(0, len(aligned_segments.tgt)):
-                    #     errors = 
+                        aligned_segments.alignment.mapping.append((i, index))
 
 
         aligned_segments.flatten_segments()
@@ -547,9 +548,9 @@ class MarkupTranslator:
 
         # recover the sentence segmentation from src_sentences
         src_for_translation_to_src_sentences = AlignedSegments(src_for_translation, src_sentences_segments)
-        # src_for_translation_to_src_sentences.debug_print()
+        src_for_translation_to_src_sentences.debug_print()
         src_for_translation_to_src_sentences.recover_alignment()
-        # src_for_translation_to_src_sentences.debug_print()
+        src_for_translation_to_src_sentences.debug_print()
 
         # print(":: tgt sentences")
         tgt_sentences_segments = SegmentedText.from_sentences(tgt_sentences)
@@ -597,6 +598,7 @@ class LindatTranslator:
         self.tgt_lang = tgt_lang
         self.splitter = SentenceSplitter(language=src_lang)
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
+        print("input to translate():", repr(input_text))
         src_lang = self.src_lang
         tgt_lang = self.tgt_lang
         assert src_lang+"-"+tgt_lang in [
@@ -631,11 +633,14 @@ class LindatTranslator:
         print("input to translator:")
         print(repr(input_text))
         print("====")
+        print("split source sentences:")
         src_sentences = _sentence_split(input_text)
         print(src_sentences)
         print("====")
         print()
         tgt_sentences = requests.post(url, headers=headers, data=data).json()
+        print("raw output from translator:")
+        print(repr(tgt_sentences))
         assert len(src_sentences) == len(tgt_sentences)
         if tgt_sentences:
             # if the line was empty or whitespace-only, then discard any potential translation
@@ -655,6 +660,7 @@ class LindatTranslator:
             assert tgt_sentences[-1].endswith("\n")
             tgt_sentences[-1] = tgt_sentences[-1][:-1]
         print("")
+        print(src_sentences, tgt_sentences)
         return src_sentences, tgt_sentences
 
 import sys
@@ -674,6 +680,7 @@ class LindatAligner:
             'src_tokens': src_batch,
             'trg_tokens': tgt_batch,
         }
+        print("Alignment data", data)
         tgt_lang = self.tgt_lang
 
 
