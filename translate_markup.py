@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class Translator:
-    def translate(self, src: str) -> Tuple[List[str], List[str]]:
+    def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
         raise NotImplementedError
 
 class Aligner:
@@ -605,9 +605,9 @@ class MarkupTranslator:
         logger.info(f"Total time {perf_counter() - timer_start:.2f} seconds")
         return str(src_segments_to_tgt_sentences.tgt)
 
-from sentence_splitter import SentenceSplitter
+from sentence_splitter import SentenceSplitter # type: ignore
 import requests
-class LindatTranslator:
+class LindatTranslator(Translator):
     def __init__(self, src_lang: str, tgt_lang: str):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
@@ -656,7 +656,7 @@ class LindatTranslator:
         tgt_sentences = requests.post(url, headers=headers, data=data).json()
         print("raw output from translator:")
         print(repr(tgt_sentences))
-        assert len(src_sentences) == len(tgt_sentences)
+        assert len(src_sentences) == len(tgt_sentences), f"{len(src_sentences)} != {len(tgt_sentences)}"
         if tgt_sentences:
             # if the line was empty or whitespace-only, then discard any potential translation
             new_tgt_sentences: List[str] = []
@@ -679,7 +679,7 @@ class LindatTranslator:
         return src_sentences, tgt_sentences
 
 import sys
-class LindatAligner:
+class LindatAligner(Aligner):
     def __init__(self, src_lang: str, tgt_lang: str):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
@@ -710,16 +710,16 @@ class LindatAligner:
             print(response.text, file=sys.stderr)
             raise Exception
 
-class RegexTokenizer:
+class RegexTokenizer(Tokenizer):
     def __init__(self):
         ACCENT = chr(769)
         self.WORD_TOKENIZATION_RULES = re.compile(r"""
         [\w""" + ACCENT + """]+://(?:[a-zA-Z]|[0-9]|[$-_@.&+])+
         |[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+.[a-zA-Z0-9-.]+
-        |[0-9]+-[а-яА-ЯіїІЇ'’`""" + ACCENT + """]+
+        |[0-9]+-[а-яА-ЯіїІЇ'’`""" + ACCENT + r"""]+
         |[+-]?[0-9](?:[0-9,.-]*[0-9])?
-        |[\w""" + ACCENT + """](?:[\w'’`-""" + ACCENT + """]?[\w""" + ACCENT + """]+)*
-        |[\w""" + ACCENT + """].(?:\[\w""" + ACCENT + """].)+[\w""" + ACCENT + """]?
+        |[\w""" + ACCENT + r"""](?:[\w'’`-""" + ACCENT + r"""]?[\w""" + ACCENT + r"""]+)*
+        |[\w""" + ACCENT + r"""].(?:\[\w""" + ACCENT + r"""].)+[\w""" + ACCENT + r"""]?
         |[^\s]
         |[.!?]+
         |-+
