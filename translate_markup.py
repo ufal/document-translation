@@ -351,18 +351,22 @@ class AlignedSegments:
         can we add (2, 3)? yes because (2, 3) fits in between (1, 2) and (3, 6)
         can we add (2, 0)? No, because that would "cross" the alignment (1, 2)
         """
+        unaligned_tgt_whitespace: List[int] = []
+        for j, seg_tgt in enumerate(self.tgt):
+            seg_tgt_is_aligned = any(map(lambda x: x[1] == j, self.alignment.mapping))
+            if isinstance(seg_tgt, WhitespaceSegment) and not seg_tgt_is_aligned:
+                unaligned_tgt_whitespace.append(j)
+
         for i, seg in enumerate(self.src):
             if isinstance(seg, WhitespaceSegment) and not self.alignment.get_src(i):
                 # segment is whitespace and is not aligned to anything in target
                 # find the first whitespace in target that we can align this whitespace 
                 # without crossing any existing alignments
-                for j, seg_tgt in enumerate(self.tgt):
-                    seg_tgt_is_aligned = any(map(lambda x: x[1] == j, self.alignment.mapping))
-                    if isinstance(seg_tgt, WhitespaceSegment) and not seg_tgt_is_aligned:
-                        candidate = (i, j)
-                        if all(map(lambda x: (x[0] <= i and x[1] <= j) or (x[0] >= i and x[1] >= j), self.alignment.mapping)):
-                            self.alignment.add(candidate)
-                            break
+                for j in unaligned_tgt_whitespace:
+                    if all(map(lambda x: (x[0] <= i and x[1] <= j) or (x[0] >= i and x[1] >= j), self.alignment.mapping)):
+                        self.alignment.add((i, j))
+                        unaligned_tgt_whitespace.remove(j)
+                        break
 
     def swap_sides(self) -> "AlignedSegments":
         # TODO (low priority): alignment should be more of a black box
@@ -590,7 +594,8 @@ class MarkupTranslator:
         logger.info("TRANSLATION")
         timer = perf_counter()
         src_sentences, tgt_sentences = self.translator.translate(str(src_for_translation))
-        logger.info(f"Translation took {perf_counter() - timer:.2f} sec")
+        translation_time = perf_counter() - timer
+        
         # print()
         # print(":: src sentences")
         src_sentences_segments = SegmentedText.from_sentences(src_sentences)
@@ -612,7 +617,8 @@ class MarkupTranslator:
         logger.info("ALIGNMENT")
         timer = perf_counter()
         src_tokens_to_tgt_tokens_alignment = self.align_segments(src_tokens, tgt_tokens)
-        logger.info(f"Alignment took {perf_counter() - timer:.2f} seconds")
+        alignment_time = perf_counter() - timer
+        
         src_tokens_to_tgt_tokens_alignment.recover_newline_alignment()
 
         src_for_translation_to_tgt_sentences = \
@@ -649,6 +655,8 @@ class MarkupTranslator:
         TagReinserter.reinsert_segments(src_segments_to_tgt_sentences)
         src_segments_to_tgt_sentences.debug_print()
 
+        logger.info(f"Translation took {translation_time:.2f} sec")
+        logger.info(f"Alignment took {alignment_time:.2f} seconds")
         logger.info(f"Total time {perf_counter() - timer_start:.2f} seconds")
         return str(src_segments_to_tgt_sentences.tgt)
 
