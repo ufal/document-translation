@@ -194,10 +194,10 @@ class SegmentedText(list[Segment]):
                     tgt.append(s)
                 else:
                     tgt.append(WhitespaceSegment(" "))
-                alignment.mapping.append((i, len(tgt) - 1))
+                alignment.add((i, len(tgt) - 1))
             else:
                 tgt.append(s)
-                alignment.mapping.append((i, len(tgt) - 1))
+                alignment.add((i, len(tgt) - 1))
         return tgt, AlignedSegments(self, tgt, alignment)
     
     def alignment_view(self):
@@ -206,7 +206,7 @@ class SegmentedText(list[Segment]):
         for i, s in enumerate(self):
             if isinstance(s, TextSegment) or isinstance(s, SentenceSeparator) or s == "\n":
                 tgt.append(s)
-                alignment.mapping.append((i, len(tgt) - 1))
+                alignment.add((i, len(tgt) - 1))
         return tgt, AlignedSegments(self, tgt, alignment)
 
     def split_sentences(self):
@@ -220,12 +220,12 @@ class SegmentedText(list[Segment]):
 
 
 class Alignment:
-    # TODO (low priority): instead of List[Tuple[int, int]] we could use something like Dict[Segment, List[Segment]]
+    # TODO (low priority): instead of Set[Tuple[int, int]] we could use something like Dict[Segment, List[Segment]]
     #                      that way the alignment would be invariant to the order of the segments
-    def __init__(self, mapping: Optional[List[Tuple[int, int]]] = None):
+    def __init__(self, mapping: Optional[Iterable[Tuple[int, int]]] = None):
         if mapping is None:
-            mapping = []
-        self.mapping = mapping
+            mapping = set()
+        self.mapping = set(mapping)
     
     @cached_property
     def src_to_tgt(self) -> Dict[int, List[int]]:
@@ -233,18 +233,27 @@ class Alignment:
         for i, j in self.mapping:
             src_to_tgt[i].append(j)
         return src_to_tgt
+    
+    def is_empty(self) -> bool:
+        return len(self.mapping) == 0
+    
+    def add(self, pair: Tuple[int, int]) -> None:
+        self.mapping.add(pair)
 
     def get_src(self, i: int) -> List[int]:
         return self.src_to_tgt.get(i, [])
 
     def map(self, f: Callable[[int, int], Tuple[int, int]]):
-        return Alignment(list(map(lambda x: f(*x), self.mapping)))
+        return Alignment(map(lambda x: f(*x), self.mapping))
+
+    def filter(self, f: Callable[[int, int], bool]):
+        return Alignment(filter(lambda x: f(*x), self.mapping))
     
     def __str__(self) -> str:
-        return f"Alignment({self.mapping})"
+        return f"Alignment({sorted(self.mapping)})"
     
     def __add__(self, other: Self):
-        return Alignment(self.mapping + other.mapping)
+        return Alignment(self.mapping.union(other.mapping))
 
 
 class AlignedSegments:
@@ -265,6 +274,11 @@ class AlignedSegments:
     def insert_segment(self, index: int, segment: Segment) -> None:
         self.tgt.insert(index, segment)
         self.alignment = self.alignment.map(lambda i, j: (i, j+1) if j >= index else (i, j))
+    
+    def remove_segment(self, index: int) -> None:
+        self.tgt.pop(index)
+        self.alignment = self.alignment.filter(lambda i, j: j != index)
+        self.alignment = self.alignment.map(lambda i, j: (i, j-1) if j > index else (i, j))
 
     def join_adjacent_segments(self, index: int) -> None:
         """
@@ -303,7 +317,7 @@ class AlignedSegments:
     def recover_alignment(self) -> None:
         # greedily recover the alignment based on segment equality
         # assume that tgt contains extra elements and src == (tgt - extra)
-        assert self.alignment.mapping == []
+        assert self.alignment.is_empty()
         src_iter = enumerate(self.src)
         for i, seg_tgt in enumerate(self.tgt):
             # skip sentence separators
@@ -312,10 +326,10 @@ class AlignedSegments:
             while True:
                 j, seg_src = next(src_iter)
                 if seg_src == seg_tgt:
-                    self.alignment.mapping.append((j, i))
+                    self.alignment.add((j, i))
                     break
                 if seg_tgt.startswith(seg_src):
-                    self.alignment.mapping.append((j, i))
+                    self.alignment.add((j, i))
                     seg_tgt = seg_tgt[len(seg_src):]
                 # if not found immediately do not continue 
                 # searching for whitespace, it might be missing
@@ -327,7 +341,7 @@ class AlignedSegments:
         src_newlines = [i for i, seg in enumerate(self.src) if seg == "\n"]
         tgt_newlines = [i for i, seg in enumerate(self.tgt) if seg == "\n"]
         assert len(src_newlines) == len(tgt_newlines)
-        self.alignment.mapping.extend(zip(src_newlines, tgt_newlines))
+        self.alignment.mapping.update(zip(src_newlines, tgt_newlines))
 
     def swap_sides(self) -> "AlignedSegments":
         # TODO (low priority): alignment should be more of a black box
@@ -337,11 +351,11 @@ class AlignedSegments:
     def compose(self, other: Self) -> "AlignedSegments":
         assert self.tgt == other.src
         # TODO (low priority): move this into Alignment method
-        new_alignment: List[Tuple[int, int]] = []
+        new_alignment: Set[Tuple[int, int]] = set()
         for (i, j) in self.alignment.mapping:
             for (k, l) in other.alignment.mapping:
                 if j == k:
-                    new_alignment.append((i, l))
+                    new_alignment.add((i, l))
         return AlignedSegments(self.src, other.tgt, Alignment(new_alignment))
 
 
@@ -391,13 +405,13 @@ class TagReinserter:
                     # we insert the current segment before the next segment
                     index = min(aligned_segments.alignment.get_src(i+1))
                     aligned_segments.insert_segment(index, seg)
-                    aligned_segments.alignment.mapping.append((i, index))
+                    aligned_segments.alignment.add((i, index))
                 elif aligned_segments.alignment.get_src(i-1) != []:
                     # the previous segment from src is aligned to a segment in tgt
                     # we insert the current segment after the previous segment
                     index = max(aligned_segments.alignment.get_src(i-1)) + 1
                     aligned_segments.insert_segment(index, seg)
-                    aligned_segments.alignment.mapping.append((i, index))
+                    aligned_segments.alignment.add((i, index))
                 else:
                     # no segment in tgt is aligned to this segment from src
                     # we insert the current segment at the end
@@ -417,13 +431,13 @@ class TagReinserter:
                         # simple case
                         index = max_tgt_indices_left
                         aligned_segments.insert_segment(index, seg)
-                        aligned_segments.alignment.mapping.append((i, index))
+                        aligned_segments.alignment.add((i, index))
                     else:
                         logger.error("DID NOT FIND PLACE TO INSERT SEGMENT")
                         # TODO: implement a more sophisticated way to insert the segment
                         index = max_tgt_indices_left
                         aligned_segments.insert_segment(index, seg)
-                        aligned_segments.alignment.mapping.append((i, index))
+                        aligned_segments.alignment.add((i, index))
 
 
         aligned_segments.flatten_segments()
@@ -479,8 +493,8 @@ class TagReinserter:
             assert min_index <= max_index
             aligned_segments.insert_segment(min_index, opening_tag)
             aligned_segments.insert_segment(max_index+2, closing_tag)
-            aligned_segments.alignment.mapping.append((opening_src_index, min_index))
-            aligned_segments.alignment.mapping.append((closing_src_index, max_index+2))
+            aligned_segments.alignment.add((opening_src_index, min_index))
+            aligned_segments.alignment.add((closing_src_index, max_index+2))
             # fix indices after insertion
             for tag_2 in unique_opening_tags.keys():
                 fixed_indices: Set[int] = set()
@@ -518,7 +532,8 @@ class MarkupTranslator:
         for src_sentence_segments, tgt_sentence_segments, alignment in zip(src_sentences, tgt_sentences, alignments):
             if not first:
                 # add separator after each sentence
-                aligned_segments += AlignedSegments(SegmentedText([SentenceSeparator()]), SegmentedText([SentenceSeparator()]), Alignment([(0,0)]))
+                aligned_segments += AlignedSegments(SegmentedText([SentenceSeparator()]), SegmentedText([SentenceSeparator()]), Alignment({(0,0)}))
+            alignment = set(map(tuple, alignment))
             aligned_segments += AlignedSegments(src_sentence_segments, tgt_sentence_segments, Alignment(alignment))
             first = False
 
