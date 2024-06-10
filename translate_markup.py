@@ -343,6 +343,27 @@ class AlignedSegments:
         assert len(src_newlines) == len(tgt_newlines)
         self.alignment.mapping.update(zip(src_newlines, tgt_newlines))
 
+    def infer_whitespace_alignment(self) -> None:
+        """
+        find whitespace alignments that do not "cross" any existing alignments
+        for example:
+        we have alignments (1,2), (3, 6)
+        can we add (2, 3)? yes because (2, 3) fits in between (1, 2) and (3, 6)
+        can we add (2, 0)? No, because that would "cross" the alignment (1, 2)
+        """
+        for i, seg in enumerate(self.src):
+            if isinstance(seg, WhitespaceSegment) and not self.alignment.get_src(i):
+                # segment is whitespace and is not aligned to anything in target
+                # find the first whitespace in target that we can align this whitespace 
+                # without crossing any existing alignments
+                for j, seg_tgt in enumerate(self.tgt):
+                    seg_tgt_is_aligned = any(map(lambda x: x[1] == j, self.alignment.mapping))
+                    if isinstance(seg_tgt, WhitespaceSegment) and not seg_tgt_is_aligned:
+                        candidate = (i, j)
+                        if all(map(lambda x: (x[0] <= i and x[1] <= j) or (x[0] >= i and x[1] >= j), self.alignment.mapping)):
+                            self.alignment.add(candidate)
+                            break
+
     def swap_sides(self) -> "AlignedSegments":
         # TODO (low priority): alignment should be more of a black box
         alignment = self.alignment.map(lambda i, j: (j, i))
@@ -360,6 +381,19 @@ class AlignedSegments:
 
 
 class TagReinserter:
+    @staticmethod
+    def reinsert_whitespace(aligned_segments: AlignedSegments) -> AlignedSegments:
+        """
+        Reinserts whitespace segments from `src` that are aligned to segment in `tgt` 
+        but the whitespace has been normalized as a single space.
+        """
+        for i, seg in enumerate(aligned_segments.src):
+            tgt_index = aligned_segments.alignment.get_src(i)
+            if isinstance(seg, WhitespaceSegment) and len(tgt_index) == 1:
+                # replace the segment 
+                aligned_segments.tgt[tgt_index[0]] = seg
+        return aligned_segments
+
     @staticmethod
     def reinsert_segments(aligned_segments: AlignedSegments) -> AlignedSegments:
         """
@@ -398,6 +432,9 @@ class TagReinserter:
                 # therefore it does not need to be reinserted (it's already in tgt)
                 continue
             else:
+                # TODO (!): all this might be better implemented as finding
+                # a non-crossing alignment for the segment
+
                 # this segment from src is not aligned to a segment in tgt
                 # therefore it needs to be reinserted
                 if aligned_segments.alignment.get_src(i+1) != []:
@@ -563,9 +600,7 @@ class MarkupTranslator:
 
         # recover the sentence segmentation from src_sentences
         src_for_translation_to_src_sentences = AlignedSegments(src_for_translation, src_sentences_segments)
-        src_for_translation_to_src_sentences.debug_print()
         src_for_translation_to_src_sentences.recover_alignment()
-        src_for_translation_to_src_sentences.debug_print()
 
         # print(":: tgt sentences")
         tgt_sentences_segments = SegmentedText.from_sentences(tgt_sentences)
@@ -580,14 +615,21 @@ class MarkupTranslator:
         logger.info(f"Alignment took {perf_counter() - timer:.2f} seconds")
         src_tokens_to_tgt_tokens_alignment.recover_newline_alignment()
 
-        # and now, mother of all compositions
-        src_segments_to_tgt_sentences = \
-            src_segments_to_src_for_translation \
-            .compose(src_for_translation_to_src_sentences) \
+        src_for_translation_to_tgt_sentences = \
+            src_for_translation_to_src_sentences \
             .compose(src_sentences_to_src_tokens) \
             .compose(src_tokens_to_tgt_tokens_alignment) \
             .compose(tgt_tokens_to_tgt_sentences)
 
+        print("src_for_translation to tgt_sentences")
+        src_for_translation_to_tgt_sentences.debug_print()
+        src_for_translation_to_tgt_sentences.infer_whitespace_alignment()
+        src_for_translation_to_tgt_sentences.debug_print()
+
+        src_segments_to_tgt_sentences = \
+            src_segments_to_src_for_translation \
+            .compose(src_for_translation_to_tgt_sentences) \
+        
         print()
         print(":: final alignment before reinserting tags:")
         src_segments_to_tgt_sentences.debug_print()
@@ -595,6 +637,11 @@ class MarkupTranslator:
         print()
         print(":: reinsert paired tags")
         TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
+        src_segments_to_tgt_sentences.debug_print()
+
+        print()
+        print(":: reinsert aligned whitespace")
+        TagReinserter.reinsert_whitespace(src_segments_to_tgt_sentences)
         src_segments_to_tgt_sentences.debug_print()
 
         print()

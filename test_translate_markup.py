@@ -103,5 +103,11 @@ class MarkupTranslatorTester(unittest.TestCase):
         self.assertEqual(tgt, tgt_expected)
     # TODO: otestovat vnořené tagy, taky jestli se zachovává jejich pořadí
 
+    def test_whitespace(self):
+        src = "   Ahoj\t\tsvěte.    \n     Jak\t\t\tse    máš?\n\n"
+        tgt_expected = "   Hello\t\tworld.    \n     How\t\t\tare    you?\n\n"
+        tgt = self.markup_translator.translate(src)
+        self.assertEqual(tgt, tgt_expected)
+
 if __name__ == "__main__":
     unittest.main()
