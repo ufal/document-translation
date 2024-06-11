@@ -51,6 +51,17 @@ class TagReinserterTester(unittest.TestCase):
         print("END STATE")
         aligned_segments.debug_print()
 
+    def test_reinsert_long_tag(self):
+        src = SegmentedText.from_string_list([
+            "<g id='1'>","<g id='2'>","<g id='3'>","Můj","</g>"," ","<g id='4'>","přítel","</g>","</g>","</g>"
+        ])
+        tgt = SegmentedText.from_string("A friend of mine")
+        alignment = Alignment([(3,6),(7,2)])
+        aligned_segments = AlignedSegments(src, tgt, alignment)
+        aligned_segments.debug_print()
+        TagReinserter.reinsert_tags(aligned_segments)
+        aligned_segments.debug_print()
+        self.assertEqual(str(aligned_segments.tgt), "<g id='1'><g id='2'>A <g id='4'>friend</g> of <g id='3'>mine</g></g></g>")
 class DummyTranslator(Translator):
     def translate(self, src: str) -> Tuple[List[str], List[str]]:
         """
