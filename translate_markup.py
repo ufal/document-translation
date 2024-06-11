@@ -1,3 +1,4 @@
+from bisect import bisect_left
 from collections import defaultdict
 from typing import Callable, Dict, Iterable, List, Optional, Self, Set, Tuple
 import re
@@ -538,51 +539,86 @@ class TagReinserter:
         unique_closing_tags: Dict[int, Tuple[int, PairedTagSegment]] = dict()
         tag_to_tgt_indices: defaultdict[int, Set[int]] = defaultdict(set)
 
-        for i, seg in enumerate(aligned_segments.src):
+        def _find_line_boundaries(segments: SegmentedText):
+            line_boundaries = [i for i, seg in enumerate(segments) if seg == "\n"]
+            line_boundaries = [-1] + line_boundaries + [len(segments)]
+            return line_boundaries
+        line_boundaries = _find_line_boundaries(aligned_segments.src)
+        tgt_line_boundaries = _find_line_boundaries(aligned_segments.tgt)
+        assert len(line_boundaries) == len(tgt_line_boundaries)
+
+        for src_index, seg in enumerate(aligned_segments.src):
+            if seg == "\n" and tag_stack:
+                line = bisect_left(line_boundaries, src_index)
+                raise ValueError(f"Paired tag is not closed in the source text on line {line}.")
             if isinstance(seg, PairedTagSegment):
                 if seg.opening_tag:
-                    tag_stack.append(i)
-                    unique_opening_tags[i] = (i, seg)
+                    tag_stack.append(src_index)
+                    unique_opening_tags[src_index] = (src_index, seg)
                 else:
-                    tag = tag_stack.pop()
-                    unique_closing_tags[tag] = (i, seg)
+                    tag_src_index = tag_stack.pop()
+                    unique_closing_tags[tag_src_index] = (src_index, seg)
             else:
-                tgt_indices = aligned_segments.alignment.get_src(i)
+                tgt_indices = aligned_segments.alignment.get_src(src_index)
                 if tgt_indices != []:
                     for tgt_index in tgt_indices:
-                        for tag in tag_stack:
-                            tag_to_tgt_indices[tag].add(tgt_index)
+                        for tag_src_index in tag_stack:
+                            tag_to_tgt_indices[tag_src_index].add(tgt_index)
         if tag_stack:
-            raise ValueError(f"tag_stack is not empty: {tag_stack}")
+            raise ValueError(f"Paired tag is not closed in the source text.")
 
         assert set(unique_opening_tags.keys()) == set(unique_closing_tags.keys())
-        
-        for tag in unique_opening_tags.keys():
-            tagged_indices = tag_to_tgt_indices[tag]
-            if not tagged_indices:
+
+        for tag_src_index in unique_opening_tags.keys():
+            tagged_tgt_indices = tag_to_tgt_indices[tag_src_index]
+            if not tagged_tgt_indices:
                 continue
-            min_index = min(tagged_indices)
-            max_index = max(tagged_indices)
-            opening_src_index, opening_tag = unique_opening_tags[tag]
-            assert opening_src_index == tag
-            closing_src_index, closing_tag = unique_closing_tags[tag]
-            assert min_index <= max_index
-            aligned_segments.insert_segment(min_index, opening_tag)
-            aligned_segments.insert_segment(max_index+2, closing_tag)
-            aligned_segments.alignment.add((opening_src_index, min_index))
-            aligned_segments.alignment.add((closing_src_index, max_index+2))
+            min_tgt_index = min(tagged_tgt_indices)
+            max_tgt_index = max(tagged_tgt_indices)
+
+            opening_src_index, opening_tag = unique_opening_tags[tag_src_index]
+            assert opening_src_index == tag_src_index
+            closing_src_index, closing_tag = unique_closing_tags[tag_src_index]
+            assert min_tgt_index <= max_tgt_index
+
+            # find the current line
+            line_bound_index = bisect_left(line_boundaries, tag_src_index)
+            left_line_bound = line_boundaries[line_bound_index-1]+1
+            right_line_bound = line_boundaries[line_bound_index]
+            assert left_line_bound <= tag_src_index and tag_src_index < right_line_bound
+
+            # find where the text begins and ends in the current line
+            text_src_indices = {i for i, seg in list(enumerate(aligned_segments.src))[left_line_bound:right_line_bound] if isinstance(seg, TextSegment)}
+            seg = aligned_segments.src[tag_src_index]
+            first_text_src_index = min(text_src_indices)
+            last_text_src_index = max(text_src_indices)
+
+            if opening_src_index <= first_text_src_index and closing_src_index >= last_text_src_index:
+                logger.info(f"Found a tag that spans the entire line {line_bound_index} in the source.")
+                left_tgt_line_bound = tgt_line_boundaries[line_bound_index-1]+1
+                right_tgt_line_bound = tgt_line_boundaries[line_bound_index]
+                text_tgt_indices = {i for i, seg in list(enumerate(aligned_segments.tgt))[left_tgt_line_bound:right_tgt_line_bound] if isinstance(seg, TextSegment)}
+                min_tgt_index = min(min_tgt_index, min(text_tgt_indices))
+                max_tgt_index = max(max(text_tgt_indices), max_tgt_index)
+
+            aligned_segments.insert_segment(min_tgt_index, opening_tag)
+            aligned_segments.insert_segment(max_tgt_index+2, closing_tag)
+            aligned_segments.alignment.add((opening_src_index, min_tgt_index))
+            aligned_segments.alignment.add((closing_src_index, max_tgt_index+2))
             # fix indices after insertion
             for tag_2 in unique_opening_tags.keys():
                 fixed_indices: Set[int] = set()
-                for i in tag_to_tgt_indices[tag_2]:
-                    if i > max_index:
-                        fixed_indices.add(i+2)
-                    elif i >= min_index:
-                        fixed_indices.add(i+1)
+                for src_index in tag_to_tgt_indices[tag_2]:
+                    if src_index > max_tgt_index:
+                        fixed_indices.add(src_index+2)
+                    elif src_index >= min_tgt_index:
+                        fixed_indices.add(src_index+1)
                     else:
-                        fixed_indices.add(i)
+                        fixed_indices.add(src_index)
                 tag_to_tgt_indices[tag_2] = fixed_indices
-                    
+            
+            # update target line boundaries
+            tgt_line_boundaries = _find_line_boundaries(aligned_segments.tgt)
 
         return aligned_segments
 
