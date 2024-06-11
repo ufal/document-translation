@@ -322,7 +322,7 @@ class AlignedSegments:
         assert start < end
         length = end - start
         new_seg = JoinedSegment(self.src[start:end])
-        self.src = self.src[:start] + [new_seg] + self.src[end:]
+        self.src = SegmentedText(self.src[:start] + [new_seg] + self.src[end:])
         # TODO (low priority) map the alignments to the joined segment
         # We do not need it because we only join segments that have no alignment
         #  ... self.alignment = self.alignment.map(lambda i, j: (start, j) if i > end else (i, j)) ...
@@ -467,6 +467,7 @@ class TagReinserter:
             if aligned_segments.alignment.get_src(i) != []:
                 return False
             if isinstance(segment, PairedTagSegment):
+                # TODO: log this only when the PairedTag contained something
                 logger.warning(f"Found unaligned PairedTagSegment {segment} on index {i}!")
             # reinsert unaligned tags
             if isinstance(segment, TagSegment):
@@ -474,68 +475,76 @@ class TagReinserter:
             # reinsert whitespace if it is not a simple space and it is not only newlines
             if isinstance(segment, WhitespaceSegment) and segment != " " and segment != "\n":
                 return True
-            return False 
+            return False
         i = 0
+        old_src = str(aligned_segments.src)
         while i < len(aligned_segments.src) - 1:
             if _to_be_reinserted(i):
-                j = i+1
+                j = i + 1
                 while j < len(aligned_segments.src) and _to_be_reinserted(j):
                     j += 1
                 if j > i + 1:
                     aligned_segments.merge_segment_span(i, j)
-                i = j
+                i += 1
             else:
                 i += 1
+        assert str(aligned_segments.src) == old_src
 
+        # TODO: hide this in Alignment
+        rightmost_alignment_by_src = [-1]*len(aligned_segments.src)
+        leftmost_alignment_by_src = [len(aligned_segments.tgt)]*len(aligned_segments.src)
+        for i, j in aligned_segments.alignment.mapping:
+            # store minimum target index for each source
+            if rightmost_alignment_by_src[i] < j:
+                rightmost_alignment_by_src[i] = j
+            # store maximum target index for each source
+            if leftmost_alignment_by_src[i] > j:
+                leftmost_alignment_by_src[i] = j
+        # fill missing values with the nearest previous alignment
+        current = -1
+        for i, j in enumerate(rightmost_alignment_by_src):
+            if j == -1:
+                rightmost_alignment_by_src[i] = current
+            else:
+                current = j
+        # fill missing values with the nearset next alignment
+        current = len(aligned_segments.tgt)
+        for i, j in reversed(list(enumerate(leftmost_alignment_by_src))):
+            if j == len(aligned_segments.tgt):
+                leftmost_alignment_by_src[i] = current
+            else:
+                current = j
+
+        line_num = 0
         for i, seg in enumerate(aligned_segments.src):
+            if seg == "\n":
+                line_num += 1
             if not _to_be_reinserted(i):
                 # this segment from src is aligned to a segment in tgt
                 # therefore it does not need to be reinserted (it's already in tgt)
                 continue
             else:
-                # TODO (!): all this might be better implemented as finding
-                # a non-crossing alignment for the segment
-
-                # this segment from src is not aligned to a segment in tgt
-                # therefore it needs to be reinserted
-                if aligned_segments.alignment.get_src(i+1) != []:
-                    # the next segment from src is aligned to a segment in tgt
-                    # we insert the current segment before the next segment
-                    index = min(aligned_segments.alignment.get_src(i+1))
-                    aligned_segments.insert_segment(index, seg)
-                    aligned_segments.alignment.add((i, index))
-                elif aligned_segments.alignment.get_src(i-1) != []:
-                    # the previous segment from src is aligned to a segment in tgt
-                    # we insert the current segment after the previous segment
-                    index = max(aligned_segments.alignment.get_src(i-1)) + 1
-                    aligned_segments.insert_segment(index, seg)
-                    aligned_segments.alignment.add((i, index))
+                if rightmost_alignment_by_src[i] < leftmost_alignment_by_src[i]:
+                    logger.info("simple case")
                 else:
-                    # no segment in tgt is aligned to this segment from src
-                    # we insert the current segment at the end
-                    logger.warning(f"no segment in tgt is aligned to this segment {i} {seg} from src")
-                    # TODO: find the best place to insert the segment by counting 
-                    #       the number of aligned segments before and after the reinserted segments
-                    tgt_indices_left: Set[int] = set()
-                    tgt_indices_right: Set[int] = set()
-                    for j in range(0, i):
-                        tgt_indices_left.update(aligned_segments.alignment.get_src(j))
-                    for j in range(i+1, len(aligned_segments.src)):
-                        tgt_indices_right.update(aligned_segments.alignment.get_src(j))
-                    print(tgt_indices_left, tgt_indices_right)
-                    max_tgt_indices_left = max(tgt_indices_left) + 1 if tgt_indices_left else 0
-                    min_tgt_indices_right = min(tgt_indices_right) if tgt_indices_right else len(aligned_segments.tgt)
-                    if max_tgt_indices_left <= min_tgt_indices_right:
-                        # simple case
-                        index = max_tgt_indices_left
-                        aligned_segments.insert_segment(index, seg)
-                        aligned_segments.alignment.add((i, index))
-                    else:
-                        logger.error("DID NOT FIND PLACE TO INSERT SEGMENT")
-                        # TODO: implement a more sophisticated way to insert the segment
-                        index = max_tgt_indices_left
-                        aligned_segments.insert_segment(index, seg)
-                        aligned_segments.alignment.add((i, index))
+                    # TODO: find a better reinsertion index in this case
+                    logger.error(f"line {line_num}: there is no non-crossing placement for {seg.debug_str()}")
+                index = rightmost_alignment_by_src[i]+1
+                aligned_segments.insert_segment(index, seg)
+                aligned_segments.alignment.add((i, index))
+                # TODO: the alignments are getting ugly and I need to rewrite it
+                rightmost_alignment_by_src = [k+1 if k >= index else k for k in rightmost_alignment_by_src]
+                old = rightmost_alignment_by_src[i]
+                rightmost_alignment_by_src[i] = max(rightmost_alignment_by_src[i], index)
+                # fill missing values with the nearest previous alignment
+                current = rightmost_alignment_by_src[i]
+                for i, j in enumerate(rightmost_alignment_by_src):
+                    if j == old:
+                        rightmost_alignment_by_src[i] = current
+                    if j > current:
+                        break
+                leftmost_alignment_by_src = [k+1 if k >= index else k for k in leftmost_alignment_by_src]
+                leftmost_alignment_by_src[i] = min(leftmost_alignment_by_src[i], index)
 
 
         aligned_segments.flatten_segments()

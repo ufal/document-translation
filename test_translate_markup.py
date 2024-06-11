@@ -12,23 +12,23 @@ logger.setLevel(logging.DEBUG)
 
 class TagReinserterTester(unittest.TestCase):
     def test_reinsert_segments_simple(self):
-        src = SegmentedText.from_string_list(["This","is","<x id='1'/>","<x id='2'/>","<x id='3'/>","test","<x id='2'/>",".","<x id='3'/>","<x id='4'/>","<x id='5'/>"])
+        src = SegmentedText.from_string_list(["<x id='1'/>","This","<x id='2'/>","is","<x id='3'/>","<x id='4'/>","<x id='5'/>","test","<x id='6'/>",".","<x id='7'/>","<x id='8'/>","<x id='9'/>"])
         tgt = SegmentedText.from_string_list(["Toto"," ","je"," ","test","."])
-        alignment = Alignment([(0, 0), (1, 2), (5, 4), (7, 5)])
+        alignment = Alignment([(1, 0), (3, 2), (7, 4), (9, 5)])
         
         aligned_segments = AlignedSegments(src, tgt, alignment)
         
-        print("BEGIN STATE")
-        print(aligned_segments)
+        # print("BEGIN STATE")
+        # aligned_segments.debug_print()
 
-        print("PROCEED")
+        # print("PROCEED")
         TagReinserter.reinsert_segments(aligned_segments)
 
-        print("END STATE")
-        print(aligned_segments)
+        # print("END STATE")
+        # aligned_segments.debug_print()
 
-        # tgt_reinserted = SegmentedText.from_string_list(["Toto"," ","je"," ","<x id='1'/>","test","<x id='2'/>","."])
-        # self.assertEqual(aligned_segments.tgt, tgt_reinserted)
+        tgt_reinserted = "<x id='1'/>Toto<x id='2'/> je<x id='3'/><x id='4'/><x id='5'/> test<x id='6'/>.<x id='7'/><x id='8'/><x id='9'/>"
+        self.assertEqual(str(aligned_segments.tgt), tgt_reinserted)
     
     def test_reinsert_tags_simple(self):
         src = SegmentedText.from_string_list([
