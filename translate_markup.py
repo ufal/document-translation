@@ -1,5 +1,4 @@
 from collections import defaultdict
-from functools import cached_property
 from typing import Callable, Dict, Iterable, List, Optional, Self, Set, Tuple
 import re
 import logging
@@ -226,18 +225,22 @@ class Alignment:
         if mapping is None:
             mapping = set()
         self.mapping = set(mapping)
+        self._src_to_tgt = None
     
-    @cached_property
+    @property
     def src_to_tgt(self) -> Dict[int, List[int]]:
-        src_to_tgt: Dict[int, List[int]] = defaultdict(list)
-        for i, j in self.mapping:
-            src_to_tgt[i].append(j)
-        return src_to_tgt
+        if self._src_to_tgt is None:
+            src_to_tgt: Dict[int, List[int]] = defaultdict(list)
+            for i, j in self.mapping:
+                src_to_tgt[i].append(j)
+            self._src_to_tgt = src_to_tgt
+        return self._src_to_tgt
     
     def is_empty(self) -> bool:
         return len(self.mapping) == 0
     
     def add(self, pair: Tuple[int, int]) -> None:
+        self._src_to_tgt = None
         self.mapping.add(pair)
 
     def get_src(self, i: int) -> List[int]:
@@ -254,6 +257,14 @@ class Alignment:
     
     def __add__(self, other: Self):
         return Alignment(self.mapping.union(other.mapping))
+    
+    def compose(self, other: Self):
+        new_alignment: Set[Tuple[int, int]] = set()
+        for (i, js) in self.src_to_tgt.items():
+            for j in js:
+                for k in other.src_to_tgt[j]:
+                    new_alignment.add((i, k))
+        return Alignment(new_alignment)
 
 
 class AlignedSegments:
@@ -381,14 +392,15 @@ class AlignedSegments:
             else:
                 current = j
 
+        aligned_srcs = set([i for i, _ in self.alignment.mapping])
         for i, seg in enumerate(self.src):
-            if isinstance(seg, WhitespaceSegment) and not self.alignment.get_src(i):
+            if isinstance(seg, WhitespaceSegment) and not i in aligned_srcs:
                 # segment is whitespace and is not aligned to anything in target
                 # find the first whitespace in target that we can align this whitespace 
                 # without crossing any existing alignments
                 for j in range(rightmost_alignment_by_src[i]+1, leftmost_alignment_by_src[i]):
                     # check if this whitespace can be aligned
-                    if j in unaligned_tgt_whitespace and isinstance(self.tgt[j], WhitespaceSegment):
+                    if j in unaligned_tgt_whitespace:
                         self.alignment.add((i, j))
                         unaligned_tgt_whitespace.remove(j)
                         break
@@ -400,13 +412,8 @@ class AlignedSegments:
     
     def compose(self, other: Self) -> "AlignedSegments":
         assert self.tgt == other.src
-        # TODO (low priority): move this into Alignment method
-        new_alignment: Set[Tuple[int, int]] = set()
-        for (i, j) in self.alignment.mapping:
-            for (k, l) in other.alignment.mapping:
-                if j == k:
-                    new_alignment.add((i, l))
-        return AlignedSegments(self.src, other.tgt, Alignment(new_alignment))
+        new_alignment = self.alignment.compose(other.alignment)
+        return AlignedSegments(self.src, other.tgt, new_alignment)
 
 
 class TagReinserter:
@@ -614,7 +621,7 @@ class MarkupTranslator:
 
         src_for_translation, src_segments_to_src_for_translation = src_segments.translation_view()
 
-        src_segments_to_src_for_translation.debug_print()
+        # src_segments_to_src_for_translation.debug_print()
 
         logger.info("TRANSLATION")
         timer = perf_counter()
@@ -652,10 +659,10 @@ class MarkupTranslator:
             .compose(src_tokens_to_tgt_tokens_alignment) \
             .compose(tgt_tokens_to_tgt_sentences)
 
-        print("src_for_translation to tgt_sentences")
-        src_for_translation_to_tgt_sentences.debug_print()
+        print(":: infer_whitespace_alignment")
+        # src_for_translation_to_tgt_sentences.debug_print()
         src_for_translation_to_tgt_sentences.infer_whitespace_alignment()
-        src_for_translation_to_tgt_sentences.debug_print()
+        # src_for_translation_to_tgt_sentences.debug_print()
 
         src_segments_to_tgt_sentences = \
             src_segments_to_src_for_translation \
@@ -663,26 +670,28 @@ class MarkupTranslator:
         
         print()
         print(":: final alignment before reinserting tags:")
-        src_segments_to_tgt_sentences.debug_print()
+        # src_segments_to_tgt_sentences.debug_print()
 
         print()
         print(":: reinsert paired tags")
         TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
-        src_segments_to_tgt_sentences.debug_print()
+        # src_segments_to_tgt_sentences.debug_print()
 
         print()
         print(":: reinsert aligned whitespace")
         TagReinserter.reinsert_whitespace(src_segments_to_tgt_sentences)
-        src_segments_to_tgt_sentences.debug_print()
+        # src_segments_to_tgt_sentences.debug_print()
 
         print()
         print(":: reinsert missing segments")
         TagReinserter.reinsert_segments(src_segments_to_tgt_sentences)
-        src_segments_to_tgt_sentences.debug_print()
+        # src_segments_to_tgt_sentences.debug_print()
 
         logger.info(f"Translation took {translation_time:.2f} sec")
         logger.info(f"Alignment took {alignment_time:.2f} seconds")
-        logger.info(f"Total time {perf_counter() - timer_start:.2f} seconds")
+        total = perf_counter() - timer_start
+        logger.info(f"Total time {total:.2f} seconds")
+        logger.info(f"Total without requests {(total - translation_time - alignment_time):.2f} seconds")
         return str(src_segments_to_tgt_sentences.tgt)
 
 from sentence_splitter import SentenceSplitter # type: ignore
