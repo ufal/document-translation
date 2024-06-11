@@ -668,7 +668,6 @@ class LindatTranslator(Translator):
         self.tgt_lang = tgt_lang
         self.splitter = SentenceSplitter(language=src_lang)
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
-        print("input to translate():", repr(input_text))
         src_lang = self.src_lang
         tgt_lang = self.tgt_lang
         assert src_lang+"-"+tgt_lang in [
@@ -684,11 +683,9 @@ class LindatTranslator(Translator):
             while input_text[num_prefix_newlines] == "\n":
                 num_prefix_newlines += 1
             input_text = input_text[num_prefix_newlines:]
-        data = {
-                "src": src_lang,
-                "tgt": tgt_lang,
-                "input_text": input_text,
-        }
+
+        print("LINDAT TRANSLATOR HERE")
+        SENT_LEN_LIMIT = 500
         def _sentence_split(text: str):
             output: List[str] = []
             for line in re.split(r"(\n+)", text):
@@ -699,18 +696,35 @@ class LindatTranslator(Translator):
                 else:
                     output.extend(self.splitter.split(line))
             return output
-        print("LINDAT TRANSLATOR HERE")
-        print("input to translator:")
-        print(repr(input_text))
+        
+        def split_to_sent_array(text: str):
+            sent_array: List[str] = []
+            for sent in _sentence_split(text):
+                while len(sent) > SENT_LEN_LIMIT:
+                    try:
+                        # When sent starts with a space, then sent[0:0] was an empty string,
+                        # and it caused an infinite loop. This fixes it.
+                        beg = 0
+                        while sent[beg] == ' ':
+                            beg += 1
+                        last_space_idx = sent.rindex(" ", beg, SENT_LEN_LIMIT)
+                        sent_array.append(sent[0:last_space_idx])
+                        sent = sent[last_space_idx:]
+                    except ValueError:
+                        # raised if no space found by rindex
+                        sent_array.append(sent[0:SENT_LEN_LIMIT])
+                        sent = sent[SENT_LEN_LIMIT:]
+                sent_array.append(sent)
+            return sent_array
+
+        src_sentences = split_to_sent_array(input_text)
+        data = {
+                "src": src_lang,
+                "tgt": tgt_lang,
+                "input_text": input_text,
+        }
         print("====")
-        print("split source sentences:")
-        src_sentences = _sentence_split(input_text)
-        print(src_sentences)
-        print("====")
-        print()
         tgt_sentences = requests.post(url, headers=headers, data=data).json()
-        print("raw output from translator:")
-        print(repr(tgt_sentences))
         assert len(src_sentences) == len(tgt_sentences), f"{len(src_sentences)} != {len(tgt_sentences)}"
         if tgt_sentences:
             # if the line was empty or whitespace-only, then discard any potential translation

@@ -1,22 +1,23 @@
 set -euxo pipefail
-
-datadir="../data"
 outdir="../output"
 mkdir -p $outdir
-file="balservis.html"
+# input_path="../data/edge_cases.html"
+input_path="../data_kofranek/old/kofranek0/dejiny00.odt"
+file=${input_path##*/}
+
 srclang="cs"
 trglang="en"
 
 # check if file exists
-if [ ! -f "$datadir/$file" ]; then
-    echo "File $datadir/$file does not exist."
+if [ ! -f "$input_path" ]; then
+    echo "File $input_path does not exist."
     exit 1
 fi
 
-cp $datadir/$file $outdir
+cp "$input_path" $outdir
 
-tikal -xm ${outdir}/${file} -sl $srclang -to ${outdir}/${file}
+tikal -xm "${outdir}/${file}" -sl $srclang -to "${outdir}/${file}.lines"
 
-time python translate_markup.py ${outdir}/${file}.$srclang $srclang $trglang ${outdir}/${file}.$trglang
+time python translate_markup.py "${outdir}/${file}.lines".$srclang $srclang $trglang "${outdir}/${file}.lines".$trglang
 
-tikal -lm ${outdir}/${file} -sl $srclang -tl $trglang -overtrg -from ${outdir}/${file}.$trglang -to ${outdir}/${file}.$trglang
+tikal -lm "${outdir}/${file}" -sl $srclang -tl $trglang -overtrg -from "${outdir}/${file}.lines".$trglang -to "${outdir}/${file}".$trglang
