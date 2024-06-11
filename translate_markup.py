@@ -314,20 +314,19 @@ class AlignedSegments:
         self.alignment = self.alignment.filter(lambda i, j: j != index)
         self.alignment = self.alignment.map(lambda i, j: (i, j-1) if j > index else (i, j))
 
-    def join_adjacent_segments(self, index: int) -> None:
+    def merge_segment_span(self, start: int, end: int) -> None:
         """
         Joins the segments at `index` and `index+1` and inserts the result at `index`.
         If the segment at `index` is already a JoinedSegment, the segments are appended to it.
         """
-        fst = self.src.pop(index)
-        snd = self.src.pop(index)
-        if isinstance(fst, JoinedSegment):
-            new_seg = JoinedSegment(fst.segments + [snd])
-            self.src.insert(index, new_seg)
-        else:
-            new_seg = JoinedSegment([fst, snd])
-            self.src.insert(index, new_seg)
-        self.alignment = self.alignment.map(lambda i, j: (i-1, j) if i > index else (i, j))
+        assert start < end
+        length = end - start
+        new_seg = JoinedSegment(self.src[start:end])
+        self.src = self.src[:start] + [new_seg] + self.src[end:]
+        # TODO (low priority) map the alignments to the joined segment
+        # We do not need it because we only join segments that have no alignment
+        #  ... self.alignment = self.alignment.map(lambda i, j: (start, j) if i > end else (i, j)) ...
+        self.alignment = self.alignment.map(lambda i, j: (i-length+1, j) if i >= end else (i, j))
     
     def flatten_segments(self) -> None:
         # TODO
@@ -478,10 +477,13 @@ class TagReinserter:
             return False 
         i = 0
         while i < len(aligned_segments.src) - 1:
-            # fst = aligned_segments.src[i]
-            # snd = aligned_segments.src[i+1]
-            if _to_be_reinserted(i) and _to_be_reinserted(i+1):
-                aligned_segments.join_adjacent_segments(i)
+            if _to_be_reinserted(i):
+                j = i+1
+                while j < len(aligned_segments.src) and _to_be_reinserted(j):
+                    j += 1
+                if j > i + 1:
+                    aligned_segments.merge_segment_span(i, j)
+                i = j
             else:
                 i += 1
 
