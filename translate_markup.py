@@ -182,22 +182,25 @@ class SegmentedText(list[Segment]):
         print()
 
     def translation_view(self):
-        # TODO (low priority): maybe rename tgt to something like src_for_translation
-        tgt = SegmentedText()
+        src_for_translation = SegmentedText()
         alignment = Alignment()
         for i, s in enumerate(self):
-            if isinstance(s, TagSegment):
+            if isinstance(s, TagSegment) and (s.tag == "x" or s.tag == "lb"):
+                # replace self-closing tags and linebreak tags with spaces
+                src_for_translation.append(WhitespaceSegment(" "))
+            elif isinstance(s, TagSegment):
                 continue
             elif isinstance(s, WhitespaceSegment):
                 if s == "\n" or s == " ":
-                    tgt.append(s)
+                    src_for_translation.append(s)
                 else:
-                    tgt.append(WhitespaceSegment(" "))
-                alignment.add((i, len(tgt) - 1))
+                    # normalize whitespace other than space and newline
+                    src_for_translation.append(WhitespaceSegment(" "))
+                alignment.add((i, len(src_for_translation) - 1))
             else:
-                tgt.append(s)
-                alignment.add((i, len(tgt) - 1))
-        return tgt, AlignedSegments(self, tgt, alignment)
+                src_for_translation.append(s)
+                alignment.add((i, len(src_for_translation) - 1))
+        return src_for_translation, AlignedSegments(self, src_for_translation, alignment)
     
     def alignment_view(self):
         tgt = SegmentedText()
