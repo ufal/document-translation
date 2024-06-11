@@ -58,7 +58,8 @@ class DummyTranslator(Translator):
         The output is a list of sentences
         """
         # dummy translate
-        tgt = src.replace("Ahoj světe", "Hello world")
+        tgt = src.replace("Ahoj", "Hello")
+        tgt = tgt.replace("světe", "world")
         tgt = tgt.replace("Jak se máš", "How are you")
         tgt = tgt.replace("Mám se fajn", "I am fine")
         def _sentence_split(text: str):
@@ -106,6 +107,12 @@ class MarkupTranslatorTester(unittest.TestCase):
     def test_whitespace(self):
         src = "   Ahoj\t\tsvěte.    \n     Jak\t\t\tse    máš?\n\n"
         tgt_expected = "   Hello\t\tworld.    \n     How\t\t\tare    you?\n\n"
+        tgt = self.markup_translator.translate(src)
+        self.assertEqual(tgt, tgt_expected)
+
+    def test_whitespace_2(self):
+        src = " <g id='1'>\t</g>  <g id='2'>Ahoj\t</g><g id='3'>\tsvěte<g id='4'>.\t</g>\t</g> \t \n  Jak\t\t\tse    máš?\n\n"
+        tgt_expected = " <g id='1'>\t</g>  <g id='2'>Hello\t</g><g id='3'>\tworld<g id='4'>.\t</g>\t</g> \t \n  How\t\t\tare    you?\n\n"
         tgt = self.markup_translator.translate(src)
         self.assertEqual(tgt, tgt_expected)
 

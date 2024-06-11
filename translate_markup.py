@@ -352,18 +352,43 @@ class AlignedSegments:
         can we add (2, 0)? No, because that would "cross" the alignment (1, 2)
         """
         unaligned_tgt_whitespace: List[int] = []
+        aligned_tgts = set([j for _, j in self.alignment.mapping])
         for j, seg_tgt in enumerate(self.tgt):
-            seg_tgt_is_aligned = any(map(lambda x: x[1] == j, self.alignment.mapping))
-            if isinstance(seg_tgt, WhitespaceSegment) and not seg_tgt_is_aligned:
+            if isinstance(seg_tgt, WhitespaceSegment) and j not in aligned_tgts:
                 unaligned_tgt_whitespace.append(j)
+        
+        rightmost_alignment_by_src = [-1]*len(self.src)
+        leftmost_alignment_by_src = [len(self.tgt)]*len(self.src)
+        for i, j in self.alignment.mapping:
+            # store minimum target index for each source
+            if rightmost_alignment_by_src[i] < j:
+                rightmost_alignment_by_src[i] = j
+            # store maximum target index for each source
+            if leftmost_alignment_by_src[i] > j:
+                leftmost_alignment_by_src[i] = j
+        # fill missing values with the nearest previous alignment
+        current = -1
+        for i, j in enumerate(rightmost_alignment_by_src):
+            if j == -1:
+                rightmost_alignment_by_src[i] = current
+            else:
+                current = j
+        # fill missing values with the nearset next alignment
+        current = len(self.tgt)
+        for i, j in reversed(list(enumerate(leftmost_alignment_by_src))):
+            if j == len(self.tgt):
+                leftmost_alignment_by_src[i] = current
+            else:
+                current = j
 
         for i, seg in enumerate(self.src):
             if isinstance(seg, WhitespaceSegment) and not self.alignment.get_src(i):
                 # segment is whitespace and is not aligned to anything in target
                 # find the first whitespace in target that we can align this whitespace 
                 # without crossing any existing alignments
-                for j in unaligned_tgt_whitespace:
-                    if all(map(lambda x: (x[0] <= i and x[1] <= j) or (x[0] >= i and x[1] >= j), self.alignment.mapping)):
+                for j in range(rightmost_alignment_by_src[i]+1, leftmost_alignment_by_src[i]):
+                    # check if this whitespace can be aligned
+                    if j in unaligned_tgt_whitespace and isinstance(self.tgt[j], WhitespaceSegment):
                         self.alignment.add((i, j))
                         unaligned_tgt_whitespace.remove(j)
                         break
