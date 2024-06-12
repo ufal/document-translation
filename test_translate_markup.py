@@ -3,9 +3,13 @@ from typing import List, Tuple
 import unittest
 import logging
 
-import mosestokenizer as moses # type: ignore
+import mosestokenizer as moses
 
-from translate_markup import Aligner, MarkupTranslator, SegmentedText, Alignment, AlignedSegments, TagReinserter, WhitespaceSegment, Tokenizer, Translator
+from markuptranslator.alignedsegments import AlignedSegments
+from markuptranslator.alignment import Alignment
+from markuptranslator.markuptranslator import Aligner, MarkupTranslator, Tokenizer, Translator
+from markuptranslator.segmentedtext import SegmentedText, WhitespaceSegment
+from markuptranslator.tagreinserter import TagReinserter
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -63,13 +67,13 @@ class TagReinserterTester(unittest.TestCase):
         aligned_segments.debug_print()
         self.assertEqual(str(aligned_segments.tgt), "<g id='1'><g id='2'>A <g id='4'>friend</g> of <g id='3'>mine</g></g></g>")
 class DummyTranslator(Translator):
-    def translate(self, src: str) -> Tuple[List[str], List[str]]:
+    def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
         """
         src_text is a multiline string.
         The output is a list of sentences
         """
         # dummy translate
-        tgt = src.replace("Ahoj", "Hello")
+        tgt = input_text.replace("Ahoj", "Hello")
         tgt = tgt.replace("světe", "world")
         tgt = tgt.replace("Jak se máš", "How are you")
         tgt = tgt.replace("Mám se fajn", "I am fine")
@@ -85,7 +89,7 @@ class DummyTranslator(Translator):
                     # output += 
             return output
 
-        return _sentence_split(src), _sentence_split(tgt)
+        return _sentence_split(input_text), _sentence_split(tgt)
 
 class DummyAligner(Aligner):
     def align(self, src_batch: List[List[str]], tgt_batch: List[List[str]]) -> List[List[Tuple[int, int]]]:
