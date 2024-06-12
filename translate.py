@@ -4,7 +4,7 @@ from typing import List, Tuple
 import requests
 import argparse
 
-from sentence_splitter import SentenceSplitter
+from sentence_splitter import SentenceSplitter # type: ignore
 
 from batch_request import BatchRequest
 from markuptranslator.markuptranslator import Translator
@@ -19,7 +19,7 @@ class LindatTranslator(Translator):
             text = "\n".join(batch) + "\n"
             src_sentences, tgt_sentences = self.translate_request(text)
             return list(zip(src_sentences, tgt_sentences))
-        self.batch_request = BatchRequest(100000, _send_batch, lambda x: len((x+"\n").encode()))
+        self.batch_request = BatchRequest(20000, _send_batch, lambda x: len((x+"\n").encode()))
     
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
         lines = input_text.splitlines()
@@ -38,39 +38,48 @@ class LindatTranslator(Translator):
                 num_prefix_newlines += 1
             input_text = input_text[num_prefix_newlines:]
 
+        # adjusted code from lindat frontend ====
+        # TODO: adjust Charles Translator API to return the source sentence splits,
+        #       so that we do not have to reconstruct it here
         SENT_LEN_LIMIT = 500
-        def _sentence_split(text: str):
-            output: List[str] = []
-            for line in re.split(r"(\n+)", text):
-                if not line:
-                    continue
-                if line.startswith("\n") and output:
-                    output[-1] += line
-                else:
-                    output.extend(self.splitter.split(line))
-            return output
-        
-        def split_to_sent_array(text: str):
+        def split_to_sent_array(text: str) -> List[str]:
+            charlimit = SENT_LEN_LIMIT
             sent_array: List[str] = []
-            for sent in _sentence_split(text):
-                while len(sent) > SENT_LEN_LIMIT:
+            for sent in self.splitter.split(text):
+                while len(sent) > charlimit:
                     try:
                         # When sent starts with a space, then sent[0:0] was an empty string,
                         # and it caused an infinite loop. This fixes it.
                         beg = 0
                         while sent[beg] == ' ':
                             beg += 1
-                        last_space_idx = sent.rindex(" ", beg, SENT_LEN_LIMIT)
+                        last_space_idx = sent.rindex(" ", beg, charlimit)
                         sent_array.append(sent[0:last_space_idx])
                         sent = sent[last_space_idx:]
                     except ValueError:
                         # raised if no space found by rindex
-                        sent_array.append(sent[0:SENT_LEN_LIMIT])
-                        sent = sent[SENT_LEN_LIMIT:]
+                        sent_array.append(sent[0:charlimit])
+                        sent = sent[charlimit:]
                 sent_array.append(sent)
             return sent_array
 
-        src_sentences = split_to_sent_array(input_text)
+        def extract_sentences(text: str) -> Tuple[List[str], List[int]]:
+            sentences: List[str] = []
+            newlines_after: List[int] = []
+            for segment in text.split('\n'):
+                if segment:
+                    sentences += split_to_sent_array(segment)
+                newlines_after.append(len(sentences) - 1)
+            return sentences, newlines_after
+
+        def reconstruct_formatting(outputs: List[str], newlines_after: List[int]) -> List[str]:
+            for i in newlines_after:
+                if i >= 0:
+                    outputs[i] += '\n'
+            return outputs
+        src_sentences = reconstruct_formatting(*extract_sentences(input_text))
+        # / adjusted code from lindat frontend ====
+
         url = f"https://lindat.mff.cuni.cz/services/translation/api/v2/models/{self.model}"
         headers = {
             "accept": "application/json",
@@ -78,17 +87,12 @@ class LindatTranslator(Translator):
         response = requests.post(url, headers=headers, files={
             'input_text': ('input.txt', input_text, 'text/plain')
         })
-        if response.request.body is not None:
-            print("input text size", len(input_text.encode()), file=sys.stderr)
-            print("request size", len(response.request.body), file=sys.stderr)
         
-        # breakpoint()
         if response.status_code != 200:
             print(f"Error: {response.status_code}", file=sys.stderr)
             print(response.text, file=sys.stderr)
             raise Exception
         tgt_sentences = response.json()
-
         assert len(src_sentences) == len(tgt_sentences), f"{len(src_sentences)} != {len(tgt_sentences)}"
         if tgt_sentences:
             # if the line was empty or whitespace-only, then discard any potential translation
@@ -107,6 +111,8 @@ class LindatTranslator(Translator):
             # remove final newline
             assert tgt_sentences[-1].endswith("\n")
             tgt_sentences[-1] = tgt_sentences[-1][:-1]
+            assert src_sentences[-1].endswith("\n")
+            src_sentences[-1] = src_sentences[-1][:-1]
         return src_sentences, tgt_sentences
 
 if __name__ == "__main__":
