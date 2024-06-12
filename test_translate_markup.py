@@ -3,13 +3,12 @@ from typing import List, Tuple
 import unittest
 import logging
 
-import mosestokenizer as moses
-
 from markuptranslator.alignedsegments import AlignedSegments
 from markuptranslator.alignment import Alignment
-from markuptranslator.markuptranslator import Aligner, MarkupTranslator, Tokenizer, Translator
+from markuptranslator.markuptranslator import Aligner, MarkupTranslator, Translator
 from markuptranslator.segmentedtext import SegmentedText, WhitespaceSegment
 from markuptranslator.tagreinserter import TagReinserter
+from translate_markup import RegexTokenizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -95,15 +94,9 @@ class DummyAligner(Aligner):
     def align(self, src_batch: List[List[str]], tgt_batch: List[List[str]]) -> List[List[Tuple[int, int]]]:
         return [[(i, i) for i in range(len(src))] for src in src_batch]
 
-class MosesTokenizer(Tokenizer):
-    def __init__(self):
-        self.t = moses.MosesTokenizer()
-    def tokenize(self, string: str) -> List[str]:
-        return self.t(string) # type: ignore
-
 class MarkupTranslatorTester(unittest.TestCase):
     def setUp(self):
-        self.markup_translator = MarkupTranslator(translator=DummyTranslator(), aligner=DummyAligner(), tokenizer=MosesTokenizer())
+        self.markup_translator = MarkupTranslator(translator=DummyTranslator(), aligner=DummyAligner(), tokenizer=RegexTokenizer())
 
     def test_nomarkup(self):
         src = "Ahoj světe! Jak se máš?\n\nMám se fajn.\n\n"
