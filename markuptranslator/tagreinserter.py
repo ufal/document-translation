@@ -96,10 +96,11 @@ class TagReinserter:
             else:
                 if rightmost_alignment_by_src[i] < leftmost_alignment_by_src[i]:
                     logger.info("simple case")
+                    index = rightmost_alignment_by_src[i]+1
                 else:
                     # TODO: find a better reinsertion index in this case
                     logger.error(f"line {line_num}: there is no non-crossing placement for {seg.debug_str()}")
-                index = rightmost_alignment_by_src[i]+1
+                    index = leftmost_alignment_by_src[i]
                 aligned_segments.insert_segment(index, seg)
                 aligned_segments.alignment.add((i, index))
                 # TODO: the alignments are getting ugly and I need to rewrite it
@@ -114,7 +115,14 @@ class TagReinserter:
                     if j > current:
                         break
                 leftmost_alignment_by_src = [k+1 if k >= index else k for k in leftmost_alignment_by_src]
+                old = leftmost_alignment_by_src[i]
                 leftmost_alignment_by_src[i] = min(leftmost_alignment_by_src[i], index)
+                current = leftmost_alignment_by_src[i]
+                for i, j in reversed(list(enumerate(leftmost_alignment_by_src))):
+                    if j == old:
+                        rightmost_alignment_by_src[i] = current
+                    if j < current:
+                        break
 
 
         aligned_segments.flatten_segments()
