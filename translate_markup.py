@@ -1,48 +1,15 @@
 import logging
 import re
-from typing import List, Tuple
-from sentence_splitter import SentenceSplitter # type: ignore
-import requests
+from typing import List
 
-from markuptranslator.markuptranslator import Aligner, MarkupTranslator, Tokenizer, Translator
+from align import LindatAligner
+from markuptranslator.markuptranslator import MarkupTranslator, Tokenizer
 from translate import LindatTranslator
 
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-import sys
-class LindatAligner(Aligner):
-    def __init__(self, src_lang: str, tgt_lang: str):
-        self.src_lang = src_lang
-        self.tgt_lang = tgt_lang
-    def align(self, src_batch: List[List[str]], tgt_batch: List[List[str]]) -> List[List[Tuple[int, int]]]:
-        src_lang = self.src_lang
-        tgt_lang = self.tgt_lang
-
-        url = f'https://lindat.cz/services/text-aligner/align/{src_lang}-{tgt_lang}'
-        headers = {
-            'Content-Type': 'application/json',
-        }
-        data = {
-            'src_tokens': src_batch,
-            'trg_tokens': tgt_batch,
-        }
-        print("Alignment data", data)
-        tgt_lang = self.tgt_lang
-
-
-        response = requests.post(url, headers=headers, json=data)
-
-        if response.status_code == 200:
-            alignment = response.json()["alignment"]
-            alignment = [[(int(a[0]), int(a[1])) for a in al] for al in alignment]
-            return alignment
-        else:
-            print(f"Error: {response.status_code}", file=sys.stderr)
-            print(response.text, file=sys.stderr)
-            raise Exception
 
 class RegexTokenizer(Tokenizer):
     def __init__(self):
@@ -79,7 +46,5 @@ if __name__ == "__main__":
 
     with open(args.input_file) as f_in, open(args.output_file, "w") as f_out:
         input_text = f_in.read()
-        print(repr(input_text))
         output = mt.translate(input_text)
-        print(repr(output))
         f_out.write(output)

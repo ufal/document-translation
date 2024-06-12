@@ -1,35 +1,53 @@
 import sys
 import argparse
+from typing import List, Tuple
 import requests
-from translate import BatchRequest
+import json
 
-def align_tokens(source_tokens, target_tokens, src_lang, trg_lang):
-    url = f'https://lindat.cz/services/text-aligner/align/{src_lang}-{trg_lang}'
-    headers = {
-        'Content-Type': 'application/json',
-    }
-    data = {
-        'src_tokens': source_tokens,
-        'trg_tokens': target_tokens,
-    }
+from batch_request import BatchRequest
+from markuptranslator.markuptranslator import Aligner
 
-    response = requests.post(url, headers=headers, json=data)
+class LindatAligner(Aligner):
+    def __init__(self, src_lang: str, tgt_lang: str):
+        self.src_lang = src_lang
+        self.tgt_lang = tgt_lang
+        def _send_batch(batch: List[Tuple[str, str]]) -> List[List[Tuple[int, int]]]:
+            src_batch, tgt_batch = zip(*batch)
+            return self.align_request(src_batch, tgt_batch)
 
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error: {response.status_code}", file=sys.stderr)
-        print(response.text, file=sys.stderr)
+        def _compute_size(x: Tuple[str, str]) -> int:
+            return len(json.dumps(x).encode())
 
-def _send_batch(batch, src_lang, trg_lang):
-    print(repr(batch), file=sys.stderr)
-    source_tokens, target_tokens = zip(*batch)
-    alignments = align_tokens(source_tokens, target_tokens, src_lang, trg_lang)
-    print(repr(alignments), file=sys.stderr)
-    for alignment in alignments["alignment"]:
-        print(repr(alignment), file=sys.stderr)
-        alignment_string = [f"{a}-{b}" for a,b in alignment]
-        print(" ".join(alignment_string))
+        self.batch_request = BatchRequest(100000, _send_batch, _compute_size)
+
+    def align(self, src_batch: List[List[str]], tgt_batch: List[List[str]]) -> List[List[Tuple[int, int]]]:
+        
+        return self.batch_request.batch_process(list(zip(src_batch, tgt_batch)))
+
+    def align_request(self, src_batch: List[List[str]], tgt_batch: List[List[str]]) -> List[List[Tuple[int, int]]]:
+        src_lang = self.src_lang
+        tgt_lang = self.tgt_lang
+
+        url = f'https://lindat.cz/services/text-aligner/align/{src_lang}-{tgt_lang}'
+        headers = {
+            'Content-Type': 'application/json',
+        }
+        data = {
+            'src_tokens': src_batch,
+            'trg_tokens': tgt_batch,
+        }
+
+        response = requests.post(url, headers=headers, json=data)
+
+        if response.status_code == 200:
+            alignment = response.json()["alignment"]
+            alignment = [[(int(a[0]), int(a[1])) for a in al] for al in alignment]
+            return alignment
+        else:
+            print(f"Error: {response.status_code}", file=sys.stderr)
+            print(response.text, file=sys.stderr)
+            raise Exception
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Align texts line by line')
@@ -41,13 +59,15 @@ if __name__ == "__main__":
 
     src_file = args.src_file
     trg_file = args.trg_file
-    callback = lambda l: _send_batch(l, args.src_lang, args.trg_lang)
-    compute_size = lambda x: len(" ".join(x[0]).encode()) + len(" ".join(x[1]).encode())
-    batchreq = BatchRequest(100000, callback, compute_size)
+
+    aligner = LindatAligner(args.src_lang, args.trg_lang)
     
     with open(src_file) as f_src, open(trg_file) as f_trg:
-        for src, trg in zip(f_src, f_trg):
-            src, trg = src.strip().split(), trg.strip().split()
-            batchreq((src, trg))
-        batchreq.flush()
-        assert not f_src.readline() and not f_trg.readline()
+        src_lines = [src.strip().split() for src in f_src]
+        tgt_lines = [trg.strip().split() for trg in f_trg]
+        assert len(src_lines) == len(tgt_lines), f"Files must have the same number of lines"
+
+        alignments = aligner.align(src_lines, tgt_lines)
+        for alignment in alignments:
+            print(" ".join([f"{a}-{b}" for a,b in alignment]))
+        

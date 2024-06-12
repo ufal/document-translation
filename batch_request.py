@@ -20,6 +20,7 @@ class BatchRequest:
 
     def __call__(self, line: str) -> None:
         size = self.compute_size(line)
+        # print(f"Adding {size} bytes to batch of {len(self.batch)} lines", file=sys.stderr)
         if self.batch_current_bytes + size > self.batch_max_bytes:
             print(f"Sending batch of {len(self.batch)} lines", file=sys.stderr)
             self._send_batch()
