@@ -766,17 +766,13 @@ class MarkupTranslator:
 from sentence_splitter import SentenceSplitter # type: ignore
 import requests
 class LindatTranslator(Translator):
-    def __init__(self, src_lang: str, tgt_lang: str):
+    def __init__(self, src_lang: str, tgt_lang: str, model: str):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
+        self.model = model
         self.splitter = SentenceSplitter(language=src_lang)
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
-        src_lang = self.src_lang
-        tgt_lang = self.tgt_lang
-        assert src_lang+"-"+tgt_lang in [
-            "en-cs","cs-en","en-hi","en-fr","fr-en","en-de","de-en","ru-en","en-ru","en-pl","pl-en","uk-cs","cs-uk","ru-cs","cs-ru"
-        ]
-        url = f"https://lindat.mff.cuni.cz/services/translation/api/v2/models/{src_lang}-{tgt_lang}"
+        url = f"https://lindat.mff.cuni.cz/services/translation/api/v2/models/{self.model}"
         headers = {
             "accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded",
@@ -822,8 +818,8 @@ class LindatTranslator(Translator):
 
         src_sentences = split_to_sent_array(input_text)
         data = {
-                "src": src_lang,
-                "tgt": tgt_lang,
+                "src": self.src_lang,
+                "tgt": self.tgt_lang,
                 "input_text": input_text,
         }
         print("====")
@@ -906,10 +902,11 @@ if __name__ == "__main__":
     parser.add_argument('input_file', help='Input text file with markup')
     parser.add_argument('src_lang', help='Source language')
     parser.add_argument('tgt_lang', help='Target language')
+    parser.add_argument('model', help='Translation model')
     parser.add_argument('output_file', help='Output text file')
     args = parser.parse_args()
 
-    translator = LindatTranslator(args.src_lang, args.tgt_lang)
+    translator = LindatTranslator(args.src_lang, args.tgt_lang, args.model)
     aligner = LindatAligner(args.src_lang, args.tgt_lang)
     tokenizer = RegexTokenizer()
     mt = MarkupTranslator(translator, aligner, tokenizer)
