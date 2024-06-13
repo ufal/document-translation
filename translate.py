@@ -26,6 +26,13 @@ class LindatTranslator(Translator):
         sentences = self.batch_request.batch_process(lines)
         # unzip the sentences
         src_sentences, tgt_sentences = zip(*sentences)
+        src_sentences, tgt_sentences = list(src_sentences), list(tgt_sentences)
+
+        # remove final newline if there was none
+        if not input_text.endswith("\n"):
+            src_sentences[-1] = src_sentences[-1][:-1]
+            tgt_sentences[-1] = tgt_sentences[-1][:-1]
+
         return src_sentences, tgt_sentences
     
     def sentences_to_text(self, sentences: List[str]) -> str:
@@ -37,6 +44,9 @@ class LindatTranslator(Translator):
             while input_text[num_prefix_newlines] == "\n":
                 num_prefix_newlines += 1
             input_text = input_text[num_prefix_newlines:]
+        
+        assert input_text.endswith("\n")
+        input_text = input_text[:-1]
 
         # adjusted code from lindat frontend ====
         # TODO: adjust Charles Translator API to return the source sentence splits,
@@ -108,11 +118,6 @@ class LindatTranslator(Translator):
             tgt_sentences[0] = "\n" * num_prefix_newlines + tgt_sentences[0]
             # add spaces after sentence ends
             tgt_sentences = [tgt_sentence + " " if not tgt_sentence.endswith("\n") else tgt_sentence for tgt_sentence in tgt_sentences]
-            # remove final newline
-            assert tgt_sentences[-1].endswith("\n")
-            tgt_sentences[-1] = tgt_sentences[-1][:-1]
-            assert src_sentences[-1].endswith("\n")
-            src_sentences[-1] = src_sentences[-1][:-1]
         return src_sentences, tgt_sentences
 
 if __name__ == "__main__":
