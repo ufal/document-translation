@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 from markuptranslator.alignedsegments import AlignedSegments
 from markuptranslator.alignment import Alignment
-from markuptranslator.segmentedtext import SegmentedText, SentenceSeparator, TextSegment
+from markuptranslator.segmentedtext import SegmentedText, SentenceSeparator, TagSegment, TextSegment, WhitespaceSegment
 from markuptranslator.tagreinserter import TagReinserter
 
 
@@ -29,6 +29,56 @@ class MarkupTranslator:
         self.translator = translator
         self.aligner = aligner
         self.tokenizer = tokenizer
+    
+    def translator_view(self, segmented_text: SegmentedText) -> Tuple["SegmentedText", Alignment]:
+        """
+        Returns a new SegmentedText that is ready for the translator.
+        Moreover, we preserve the alignment between the original SegmentedText and the processed SegmentedText for the translator.
+        
+        The processing steps are following:
+        - replace any whitespace sequence with a single space (but keep newlines)
+        - remove any tags
+        - if the tag removed was <x> or <lb>, insert a space instead of the tag
+        """
+        src_for_translator = SegmentedText()
+        alignment = Alignment()
+        for seg in segmented_text:
+            if isinstance(seg, TagSegment) and (seg.tag == "x" or seg.tag == "lb"):
+                # TODO (low priority): check if there already is a space and do not add it if it is there
+                # replace self-closing tags and linebreak tags with spaces
+                src_for_translator.append(WhitespaceSegment(" "))
+            elif isinstance(seg, TagSegment):
+                continue
+            elif isinstance(seg, WhitespaceSegment):
+                if str(seg) == "\n" or str(seg) == " ":
+                    other_seg = seg
+                else:
+                    # normalize whitespace other than space and newline
+                    other_seg = WhitespaceSegment(" ")
+                src_for_translator.append(other_seg)
+                alignment.add(seg, other_seg)
+            else:
+                src_for_translator.append(seg)
+                alignment.add(seg, seg)
+        return src_for_translator, alignment
+    
+    def aligner_view(self, segmented_text: SegmentedText) -> Tuple["SegmentedText", Alignment]:
+        """
+        Returns a new SegmentedText that is ready for the word aligner.
+        Preserves the alignment between the original SegmentedText and the processed SegmentedText.
+
+        The details of the processing steps are:
+        - remove anything other than words (TextSegments), sentence separators (SentenceSeparator) and newlines
+        - the sentence separators are preserved because the aligner works on sentence level rather than line level.
+        - all whitespace except newline is removed because the aligner does not use it.
+        """
+        src_for_aligner = SegmentedText()
+        alignment = Alignment()
+        for seg in segmented_text:
+            if isinstance(seg, TextSegment) or isinstance(seg, SentenceSeparator) or str(seg) == "\n":
+                src_for_aligner.append(seg)
+                alignment.add(seg, seg)
+        return src_for_aligner, alignment
 
     def align_segments(self, src: SegmentedText, tgt: SegmentedText) -> AlignedSegments:
         src_sentences = list(src.split_sentences())
@@ -41,16 +91,23 @@ class MarkupTranslator:
         
         alignments = self.aligner.align(src_batch, tgt_batch)
 
-        aligned_segments = AlignedSegments()
+        # TODO: optimize this
+        merged_aligned_segments = AlignedSegments()
         first = True
         for src_sentence_segments, tgt_sentence_segments, alignment in zip(src_sentences, tgt_sentences, alignments):
             if not first:
                 # add separator after each sentence
-                aligned_segments += AlignedSegments(SegmentedText([SentenceSeparator()]), SegmentedText([SentenceSeparator()]), Alignment({(0,0)}))
-            aligned_segments += AlignedSegments(src_sentence_segments, tgt_sentence_segments, Alignment(alignment))
+                sep_src = SentenceSeparator()
+                sep_tgt = SentenceSeparator()
+                sep_al = Alignment({sep_src: {sep_tgt}})
+                sep = AlignedSegments(SegmentedText([sep_src]), SegmentedText([sep_tgt]), sep_al)
+                merged_aligned_segments += sep
+            aligned_segments = AlignedSegments(src_sentence_segments, tgt_sentence_segments)
+            aligned_segments.alignment_from_iterable(alignment)
+            merged_aligned_segments += aligned_segments
             first = False
 
-        return aligned_segments
+        return merged_aligned_segments
     
     
     def tokenize_segmented_text(self, segmented_text: SegmentedText, tokenizer: Tokenizer):
@@ -75,13 +132,13 @@ class MarkupTranslator:
         src_segments = SegmentedText.from_string(src)
         src_segments = self.tokenize_segmented_text(src_segments, self.tokenizer)
 
-        src_for_translation, src_segments_to_src_for_translation_alignment = src_segments.translator_view()
+        src_for_translation, src_segments_to_src_for_translation_alignment = self.translator_view(src_segments)
         src_segments_to_src_for_translation = AlignedSegments(src_segments, src_for_translation, src_segments_to_src_for_translation_alignment)
-
-        # src_segments_to_src_for_translation.debug_print()
 
         logger.info("RUN TRANSLATION")
         timer = perf_counter()
+        src_for_translation.debug_print()
+        print(repr(str(src_for_translation)))
         src_sentences, tgt_sentences = self.translator.translate(str(src_for_translation))
         translation_time = perf_counter() - timer
         
@@ -90,7 +147,7 @@ class MarkupTranslator:
         src_sentences = SegmentedText.from_sentences(src_sentences)
         src_sentences = self.tokenize_segmented_text(src_sentences, self.tokenizer)
         # prepare source sentences for word alignment
-        src_tokens, src_sentences_to_src_tokens_alignment = src_sentences.aligner_view()
+        src_tokens, src_sentences_to_src_tokens_alignment = self.aligner_view(src_sentences)
         src_sentences_to_src_tokens = AlignedSegments(src_sentences, src_tokens, src_sentences_to_src_tokens_alignment)
 
         # recover the sentence segmentation from src_sentences
@@ -101,7 +158,7 @@ class MarkupTranslator:
         tgt_sentences = SegmentedText.from_sentences(tgt_sentences)
         tgt_sentences = self.tokenize_segmented_text(tgt_sentences, self.tokenizer)
         # prepare target sentences for word alignment
-        tgt_tokens, tgt_sentences_to_tgt_tokens_alignment = tgt_sentences.aligner_view()
+        tgt_tokens, tgt_sentences_to_tgt_tokens_alignment = self.aligner_view(tgt_sentences)
         tgt_sentences_to_tgt_tokens = AlignedSegments(tgt_sentences, tgt_tokens, tgt_sentences_to_tgt_tokens_alignment)
         tgt_tokens_to_tgt_sentences = tgt_sentences_to_tgt_tokens.swap_sides()
 
@@ -133,7 +190,7 @@ class MarkupTranslator:
 
         print()
         print(":: reinsert paired tags")
-        TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
+        # TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
         # src_segments_to_tgt_sentences.debug_print()
 
         print()

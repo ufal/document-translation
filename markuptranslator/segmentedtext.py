@@ -1,20 +1,26 @@
 import re
-from typing import Iterable, Iterator, List, Optional, Self, Tuple
+from typing import Iterable, Iterator, List, Optional
 
 from termcolor import colored
 
-from markuptranslator.alignment import Alignment
-
-class Segment(str):
-    def __new__(cls, string: str) -> Self:
-        instance = super().__new__(cls, string)
-        return instance
+class Segment(object):
+    def __init__(self, string: str):
+        self.string = string
     def debug_color(self, string: str) -> str:
         raise NotImplementedError
+    @property
     def debug_str(self) -> str:
-        return self.debug_color(self)
+        return self.debug_color(self.string)
     def debug_len(self) -> int:
-        return len(self)
+        return len(self.string)
+    def __str__(self) -> str:
+        return self.string
+    def __repr__(self) -> str:
+        return repr(self.string)
+    def __len__(self) -> int:
+        return len(self.string)
+    def __hash__(self) -> int:
+        return hash(self.string)
 
 class TextSegment(Segment):
     def debug_color(self, string: str) -> str:
@@ -22,6 +28,7 @@ class TextSegment(Segment):
 
 class TagSegment(Segment):
     def __init__(self, string: str):
+        super().__init__(string)
         if string.startswith("</"):
             match = re.search(r'</(\w+)>', string)
             if match:
@@ -53,6 +60,7 @@ class PairedTagSegment(TagSegment):
 class WhitespaceSegment(Segment):
     def debug_color(self, string: str) -> str:
         return colored(string, "white", "on_blue")
+    @property
     def debug_str(self) -> str:
         return self.debug_color(repr(self))
     def debug_len(self) -> int:
@@ -76,30 +84,17 @@ class SegmentFactory:
             return TextSegment(string)
 
 class SentenceSeparator(Segment):
-    def __new__(cls):
-        instance = super().__new__(cls, "")
-        return instance
+    def __init__(self):
+        super().__init__("")
     def debug_color(self, string: str) -> str:
         return colored(string, "black", "on_red")
+    @property
     def debug_str(self):
         return self.debug_color("||")
     def debug_len(self) -> int:
         return 2
 
-class JoinedSegment(Segment):
-    def __new__(cls, segments: List[Segment]):
-        instance = super().__new__(cls, ''.join(str(x) for x in segments))
-        return instance
-    def __init__(self, segments: List[Segment]):
-        self.segments = segments
-    def debug_color(self, string: str) -> str:
-        return colored(string, "black", "on_yellow", attrs=["underline"])
-    def debug_str(self) -> str:
-        return ''.join(colored(x.debug_str(), attrs=["underline"]) for x in self.segments)
-    def debug_len(self) -> int:
-        return sum(x.debug_len() for x in self.segments)
-
-class SegmentedText(list[Segment]):
+class SegmentedText(List[Segment]):
     """
     A text that has been split into segments of text, tags and whitespace.
     The main assumption is that joining the segments will yield the original text.
@@ -131,13 +126,24 @@ class SegmentedText(list[Segment]):
         return cls(output[:-1])
 
     def __str__(self) -> str:
-        return ''.join(x for x in self)
+        return ''.join(str(x) for x in self)
 
+    def replace(self, old: Segment, new: Segment) -> None:
+        i = self.index(old)
+        self[i] = new
+        try:
+            self.index(old, i)
+        except:
+            pass
+        else:
+            raise ValueError("Found duplicate segment in SegmentedText")
+
+    @property
     def debug_str(self) -> str:
-        return ''.join(x.debug_str() for x in self)
+        return ''.join(x.debug_str for x in self)
 
     def debug_print(self) -> None:
-        print(self.debug_str())
+        print(self.debug_str)
         index_top = 0
         index_bottom = 0
         for i, seg in enumerate(self):
@@ -149,55 +155,6 @@ class SegmentedText(list[Segment]):
                 print(" "*(index_top-index_bottom), end="")
                 index_bottom = index_top
         print()
-
-    def translator_view(self) -> Tuple["SegmentedText", Alignment]:
-        """
-        Returns a new SegmentedText that is ready for the translator.
-        Moreover, we preserve the alignment between the original SegmentedText and the processed SegmentedText for the translator.
-        
-        The processing steps are following:
-        - replace any whitespace sequence with a single space (but keep newlines)
-        - remove any tags
-        - if the tag removed was <x> or <lb>, insert a space instead of the tag
-        """
-        src_for_translator = SegmentedText()
-        alignment = Alignment()
-        for i, s in enumerate(self):
-            if isinstance(s, TagSegment) and (s.tag == "x" or s.tag == "lb"):
-                # TODO (low priority): check if there already is a space and do not add it if it is there
-                # replace self-closing tags and linebreak tags with spaces
-                src_for_translator.append(WhitespaceSegment(" "))
-            elif isinstance(s, TagSegment):
-                continue
-            elif isinstance(s, WhitespaceSegment):
-                if s == "\n" or s == " ":
-                    src_for_translator.append(s)
-                else:
-                    # normalize whitespace other than space and newline
-                    src_for_translator.append(WhitespaceSegment(" "))
-                alignment.add((i, len(src_for_translator) - 1))
-            else:
-                src_for_translator.append(s)
-                alignment.add((i, len(src_for_translator) - 1))
-        return src_for_translator, alignment
-    
-    def aligner_view(self) -> Tuple["SegmentedText", Alignment]:
-        """
-        Returns a new SegmentedText that is ready for the word aligner.
-        Preserves the alignment between the original SegmentedText and the processed SegmentedText.
-
-        The details of the processing steps are:
-        - remove anything other than words (TextSegments), sentence separators (SentenceSeparator) and newlines
-        - the sentence separators are preserved because the aligner works on sentence level rather than line level.
-        - all whitespace except newline is removed because the aligner does not use it.
-        """
-        src_for_aligner = SegmentedText()
-        alignment = Alignment()
-        for i, s in enumerate(self):
-            if isinstance(s, TextSegment) or isinstance(s, SentenceSeparator) or s == "\n":
-                src_for_aligner.append(s)
-                alignment.add((i, len(src_for_aligner) - 1))
-        return src_for_aligner, alignment
 
     def split_sentences(self) -> Iterator["SegmentedText"]:
         i = 0

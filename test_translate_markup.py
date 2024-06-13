@@ -17,18 +17,11 @@ class TagReinserterTester(unittest.TestCase):
     def test_reinsert_segments_simple(self):
         src = SegmentedText.from_string_list(["<x id='1'/>","This","<x id='2'/>","is","<x id='3'/>","<x id='4'/>","<x id='5'/>","test","<x id='6'/>",".","<x id='7'/>","<x id='8'/>","<x id='9'/>"])
         tgt = SegmentedText.from_string_list(["Toto"," ","je"," ","test","."])
-        alignment = Alignment([(1, 0), (3, 2), (7, 4), (9, 5)])
         
-        aligned_segments = AlignedSegments(src, tgt, alignment)
+        aligned_segments = AlignedSegments(src, tgt)
+        aligned_segments.alignment_from_iterable([(1, 0), (3, 2), (7, 4), (9, 5)])
         
-        # print("BEGIN STATE")
-        # aligned_segments.debug_print()
-
-        # print("PROCEED")
         TagReinserter.reinsert_segments(aligned_segments)
-
-        # print("END STATE")
-        # aligned_segments.debug_print()
 
         tgt_reinserted = "<x id='1'/>Toto<x id='2'/> je<x id='3'/><x id='4'/><x id='5'/> test<x id='6'/>.<x id='7'/><x id='8'/><x id='9'/>"
         self.assertEqual(str(aligned_segments.tgt), tgt_reinserted)

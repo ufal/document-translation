@@ -1,52 +1,77 @@
-from collections import defaultdict
-from typing import Callable, Dict, Iterable, List, Optional, Self, Set, Tuple
+from collections import Counter, defaultdict
+from typing import Dict, Iterable, List, Optional, Self, Set, Tuple
+
+from markuptranslator.segmentedtext import Segment
 
 
 class Alignment:
-    # TODO (low priority): instead of Set[Tuple[int, int]] we could use something like Dict[Segment, List[Segment]]
-    #                      that way the alignment would be invariant to the order of the segments
-    def __init__(self, mapping: Optional[Iterable[Tuple[int, int]]] = None):
-        if mapping is None:
-            mapping = set()
-        self.mapping = set(mapping)
-        self._src_to_tgt = None
+    def __init__(self, src_to_tgt: Optional[Dict[Segment, Set[Segment]]] = None):
+        if src_to_tgt is None:
+            self._src_to_tgt: defaultdict[Segment, Set[Segment]] = defaultdict(set)
+        else:
+            self._src_to_tgt = defaultdict(set, src_to_tgt)
+        self.init_aligned_sets()
     
-    @property
-    def src_to_tgt(self) -> Dict[int, List[int]]:
-        if self._src_to_tgt is None:
-            src_to_tgt: Dict[int, List[int]] = defaultdict(list)
-            for i, j in self.mapping:
-                src_to_tgt[i].append(j)
-            self._src_to_tgt = src_to_tgt
-        return self._src_to_tgt
+    def init_aligned_sets(self) -> None:
+        self.aligned_tgts: Counter[Segment] = Counter()
+        for _, tgt_set in self._src_to_tgt.items():
+            self.aligned_tgts.update(tgt_set)
+
+    @classmethod
+    def from_iterable(cls, alignment: Iterable[Tuple[Segment, Segment]]) -> Self:
+        instance = cls()
+        instance.update_from_iterable(alignment)
+        return instance
     
+    def update_from_iterable(self, alignment: Iterable[Tuple[Segment, Segment]]) -> None:
+        for (src_seg, tgt_seg) in alignment:
+            self._src_to_tgt[src_seg].add(tgt_seg)
+            self.aligned_tgts[tgt_seg] += 1
+
+    def is_src_aligned(self, src: Segment) -> bool:
+        return bool(self.get(src))
+    
+    def is_tgt_aligned(self, tgt: Segment) -> bool:
+        return tgt in self.aligned_tgts and self.aligned_tgts[tgt] > 0
+
     def is_empty(self) -> bool:
-        return len(self.mapping) == 0
+        return len(self._src_to_tgt) == 0 or all(len(s) == 0 for s in self._src_to_tgt.values())
     
-    def add(self, pair: Tuple[int, int]) -> None:
-        self._src_to_tgt = None
-        self.mapping.add(pair)
-
-    def get_src(self, i: int) -> List[int]:
-        return self.src_to_tgt.get(i, [])
-
-    def map(self, f: Callable[[int, int], Tuple[int, int]]):
-        return Alignment(map(lambda x: f(*x), self.mapping))
-
-    def filter(self, f: Callable[[int, int], bool]):
-        return Alignment(filter(lambda x: f(*x), self.mapping))
+    def add(self, src: Segment, tgt: Segment) -> None:
+        self._src_to_tgt[src].add(tgt)
+        self.aligned_tgts[tgt] += 1
     
+    def remove(self, src: Segment, tgt: Segment) -> None:
+        self._src_to_tgt[src].remove(tgt)
+        self.aligned_tgts[tgt] -= 1
+
+    def get(self, src: Segment) -> Set[Segment]:
+        return self._src_to_tgt[src]
+
+    def to_list(self) -> List[Tuple[Segment, Segment]]:
+        return [(src, tgt) for (src, tgt_set) in self._src_to_tgt.items() for tgt in tgt_set]
+
     def __str__(self) -> str:
-        return f"Alignment({sorted(self.mapping)})"
-    
-    def __add__(self, other: Self):
-        return Alignment(self.mapping.union(other.mapping))
-    
-    def compose(self, other: Self):
-        new_alignment: Set[Tuple[int, int]] = set()
-        for (i, js) in self.src_to_tgt.items():
-            for j in js:
-                for k in other.src_to_tgt[j]:
-                    new_alignment.add((i, k))
-        return Alignment(new_alignment)
+        return f"Alignment({self.to_list()})"
 
+    def __add__(self, other: Self):
+        new_alignment = Alignment(self._src_to_tgt)
+        for (src, tgt_set) in other._src_to_tgt.items():
+            for tgt in tgt_set:
+                new_alignment.add(src, tgt)
+        return new_alignment
+    
+    def swap(self) -> "Alignment":
+        new_alignment = Alignment()
+        for (src, tgt_set) in self._src_to_tgt.items():
+            for tgt in tgt_set:
+                new_alignment.add(tgt, src)
+        return new_alignment
+
+    def compose(self, other: Self):
+        composed_alignment = Alignment()
+        for (src, tgt_set) in self._src_to_tgt.items():
+            for tgt in tgt_set:
+                for other_tgt in other.get(tgt):
+                    composed_alignment.add(src, other_tgt)
+        return composed_alignment
