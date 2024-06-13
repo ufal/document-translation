@@ -1,4 +1,3 @@
-import sys
 import argparse
 from typing import List, Tuple
 import requests
@@ -44,9 +43,7 @@ class LindatAligner(Aligner):
             alignment = [[(int(a[0]), int(a[1])) for a in al] for al in alignment]
             return alignment
         else:
-            print(f"Error: {response.status_code}", file=sys.stderr)
-            print(response.text, file=sys.stderr)
-            raise Exception
+            raise Exception(f"Request failed with status code {response.status_code}\n{response.text}")
 
 
 if __name__ == "__main__":
@@ -70,4 +67,3 @@ if __name__ == "__main__":
         alignments = aligner.align(src_lines, tgt_lines)
         for alignment in alignments:
             print(" ".join([f"{a}-{b}" for a,b in alignment]))
-        

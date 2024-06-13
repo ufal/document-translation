@@ -99,9 +99,8 @@ class LindatTranslator(Translator):
         })
         
         if response.status_code != 200:
-            print(f"Error: {response.status_code}", file=sys.stderr)
-            print(response.text, file=sys.stderr)
-            raise Exception
+            raise Exception(f"Request failed with status code {response.status_code}\n{response.text}")
+        
         tgt_sentences = response.json()
         assert len(src_sentences) == len(tgt_sentences), f"{len(src_sentences)} != {len(tgt_sentences)}"
         if tgt_sentences:

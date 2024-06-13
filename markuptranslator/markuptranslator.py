@@ -11,7 +11,6 @@ from markuptranslator.tagreinserter import TagReinserter
 
 logger = logging.getLogger(__name__)
 
-
 class Translator:
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
         raise NotImplementedError
@@ -137,13 +136,9 @@ class MarkupTranslator:
 
         logger.info("RUN TRANSLATION")
         timer = perf_counter()
-        src_for_translation.debug_print()
-        print(repr(str(src_for_translation)))
         src_sentences, tgt_sentences = self.translator.translate(str(src_for_translation))
         translation_time = perf_counter() - timer
         
-        # print()
-        # print(":: src sentences")
         src_sentences = SegmentedText.from_sentences(src_sentences)
         src_sentences = self.tokenize_segmented_text(src_sentences, self.tokenizer)
         # prepare source sentences for word alignment
@@ -154,7 +149,6 @@ class MarkupTranslator:
         src_for_translation_to_src_sentences = AlignedSegments(src_for_translation, src_sentences)
         src_for_translation_to_src_sentences.recover_alignment()
 
-        # print(":: tgt sentences")
         tgt_sentences = SegmentedText.from_sentences(tgt_sentences)
         tgt_sentences = self.tokenize_segmented_text(tgt_sentences, self.tokenizer)
         # prepare target sentences for word alignment
@@ -175,31 +169,25 @@ class MarkupTranslator:
             .compose(src_tokens_to_tgt_tokens_alignment) \
             .compose(tgt_tokens_to_tgt_sentences)
 
-        print(":: infer_whitespace_alignment")
-        # src_for_translation_to_tgt_sentences.debug_print()
+        logger.info(":: infer_whitespace_alignment")
         src_for_translation_to_tgt_sentences.infer_whitespace_alignment()
-        # src_for_translation_to_tgt_sentences.debug_print()
 
         src_segments_to_tgt_sentences = \
             src_segments_to_src_for_translation \
             .compose(src_for_translation_to_tgt_sentences) \
         
-        print()
-        print(":: final alignment before reinserting tags:")
+        logger.info("\n:: final alignment before reinserting tags:")
         # src_segments_to_tgt_sentences.debug_print()
 
-        print()
-        print(":: reinsert paired tags")
+        logger.info("\n:: reinsert paired tags")
         # TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
         # src_segments_to_tgt_sentences.debug_print()
 
-        print()
-        print(":: reinsert aligned whitespace")
+        logger.info("\n:: reinsert aligned whitespace")
         TagReinserter.reinsert_whitespace(src_segments_to_tgt_sentences)
         # src_segments_to_tgt_sentences.debug_print()
 
-        print()
-        print(":: reinsert missing segments")
+        logger.info("\n:: reinsert missing segments")
         TagReinserter.reinsert_segments(src_segments_to_tgt_sentences)
         # src_segments_to_tgt_sentences.debug_print()
 

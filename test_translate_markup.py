@@ -10,8 +10,13 @@ from markuptranslator.segmentedtext import SegmentedText, WhitespaceSegment
 from markuptranslator.tagreinserter import TagReinserter
 from translate_markup import RegexTokenizer
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+# set the level of all loggers to DEBUG
+loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+for logger in loggers:
+    logger.setLevel(logging.DEBUG)
 
 class TagReinserterTester(unittest.TestCase):
     def test_reinsert_segments_simple(self):

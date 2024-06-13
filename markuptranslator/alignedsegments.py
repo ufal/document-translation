@@ -56,7 +56,6 @@ class AlignedSegments:
         assert self.alignment.is_empty()
         src_iter = iter(self.src)
         for seg_tgt in self.tgt:
-            print(seg_tgt.debug_str)
             # skip sentence separators
             if isinstance(seg_tgt, SentenceSeparator):
                 continue
@@ -64,7 +63,6 @@ class AlignedSegments:
             seg_tgt_str = str(seg_tgt)
             while True:
                 seg_src = next(src_iter)
-                print(seg_src.debug_str)
                 if str(seg_src) == seg_tgt_str:
                     self.alignment.add(seg_src, seg_tgt)
                     break

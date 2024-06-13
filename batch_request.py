@@ -1,6 +1,8 @@
-import sys
+import logging
 from typing import Any, Callable, List
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 class BatchRequest:
     def __init__(self, batch_max_bytes: int, callback: Callable[[List[Any]], List[Any]], compute_size: Callable[[Any], int]):
@@ -20,9 +22,9 @@ class BatchRequest:
 
     def __call__(self, line: str) -> None:
         size = self.compute_size(line)
-        # print(f"Adding {size} bytes to batch of {len(self.batch)} lines", file=sys.stderr)
+        logger.debug(f"Adding {size} bytes to batch of {len(self.batch)} lines")
         if self.batch_current_bytes + size > self.batch_max_bytes:
-            print(f"Sending batch of {len(self.batch)} lines", file=sys.stderr)
+            logger.debug(f"Sending batch of {len(self.batch)} lines")
             self._send_batch()
         self.batch.append(line)
         self.batch_current_bytes += size
