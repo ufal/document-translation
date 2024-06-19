@@ -47,8 +47,13 @@ class AlignedSegments:
         self.src.debug_print()
         self.tgt.debug_print()
         if len(self.src) < 200:
-            print(self.alignment)
-            print(([(self.src.index(src), self.tgt.index(tgt)) for src, tgt in self.alignment.to_list()]))
+            print()
+            alignment_list = self.alignment.to_list()
+            alignment_indices = [(self.src.index(src), self.tgt.index(tgt)) for src, tgt in self.alignment.to_list()]
+            both = sorted(list(zip(alignment_indices, alignment_list)))
+            print(", ".join([f"{i}-{src.debug_str} -> {j}-{tgt.debug_str} " for ((i,j),(src, tgt)) in both]))
+            # print(sorted(alignment_indices))
+        print()
     
     def recover_alignment(self) -> None:
         # greedily recover the alignment based on segment equality

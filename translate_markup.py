@@ -10,6 +10,9 @@ from translate import LindatTranslator
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+for logger in loggers:
+    logger.setLevel(logging.INFO)
 
 class RegexTokenizer(Tokenizer):
     def __init__(self):

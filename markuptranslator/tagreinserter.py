@@ -40,9 +40,9 @@ class TagReinserter:
             # if the segment from `src` is aligned already with something in `tgt`, it should not be reinserted (as it is already there)
             if aligned_segments.alignment.is_src_aligned(segment):
                 return False
-            if isinstance(segment, PairedTagSegment):
+            # if isinstance(segment, PairedTagSegment):
                 # TODO: log this only when the PairedTag contained something
-                logger.warning(f"Found unaligned PairedTagSegment {segment} on index {i}!")
+                # logger.warning(f"Found unaligned PairedTagSegment {segment} on index {i}!")
             # reinsert unaligned tags
             if isinstance(segment, TagSegment):
                 return True

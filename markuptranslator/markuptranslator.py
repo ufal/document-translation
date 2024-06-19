@@ -177,7 +177,8 @@ class MarkupTranslator:
             .compose(src_for_translation_to_tgt_sentences) \
         
         logger.info("\n:: final alignment before reinserting tags:")
-        # src_segments_to_tgt_sentences.debug_print()
+        if logger.isEnabledFor(logging.DEBUG):
+            src_segments_to_tgt_sentences.debug_print()
 
         logger.info("\n:: reinsert paired tags")
         # TagReinserter.reinsert_tags(src_segments_to_tgt_sentences)
@@ -185,11 +186,13 @@ class MarkupTranslator:
 
         logger.info("\n:: reinsert aligned whitespace")
         TagReinserter.reinsert_whitespace(src_segments_to_tgt_sentences)
-        # src_segments_to_tgt_sentences.debug_print()
+        if logger.isEnabledFor(logging.DEBUG):
+            src_segments_to_tgt_sentences.debug_print()
 
         logger.info("\n:: reinsert missing segments")
         TagReinserter.reinsert_segments(src_segments_to_tgt_sentences)
-        # src_segments_to_tgt_sentences.debug_print()
+        if logger.isEnabledFor(logging.DEBUG):
+            src_segments_to_tgt_sentences.debug_print()
 
         logger.info(f"Translation took {translation_time:.2f} sec")
         logger.info(f"Alignment took {alignment_time:.2f} seconds")
