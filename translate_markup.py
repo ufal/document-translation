@@ -11,8 +11,8 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
-for logger in loggers:
-    logger.setLevel(logging.INFO)
+for _logger in loggers:
+    _logger.setLevel(logger.level)
 
 class RegexTokenizer(Tokenizer):
     def __init__(self):
@@ -40,7 +40,13 @@ if __name__ == "__main__":
     parser.add_argument('tgt_lang', help='Target language')
     parser.add_argument('model', help='Translation model')
     parser.add_argument('output_file', help='Output text file')
+    parser.add_argument('--debug', action='store_true', help='Debug mode')
     args = parser.parse_args()
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+        for _logger in loggers:
+            _logger.setLevel(logger.level)
 
     translator = LindatTranslator(args.src_lang, args.tgt_lang, args.model)
     aligner = LindatAligner(args.src_lang, args.tgt_lang)

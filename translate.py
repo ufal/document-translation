@@ -22,6 +22,10 @@ class LindatTranslator(Translator):
         self.batch_request = BatchRequest(20000, _send_batch, lambda x: len((x+"\n").encode()))
     
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
+        if input_text == "":
+            return [], []
+
+        # split into sentences
         lines = input_text.splitlines()
         sentences = self.batch_request.batch_process(lines)
         # unzip the sentences
@@ -116,6 +120,7 @@ class LindatTranslator(Translator):
             src_sentences[0] = "\n" * num_prefix_newlines + src_sentences[0]
             tgt_sentences[0] = "\n" * num_prefix_newlines + tgt_sentences[0]
             # add spaces after sentence ends
+            src_sentences = [src_sentence + " " if not src_sentence.endswith("\n") else src_sentence for src_sentence in src_sentences]
             tgt_sentences = [tgt_sentence + " " if not tgt_sentence.endswith("\n") else tgt_sentence for tgt_sentence in tgt_sentences]
         return src_sentences, tgt_sentences
 

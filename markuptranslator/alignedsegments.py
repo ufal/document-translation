@@ -57,31 +57,37 @@ class AlignedSegments:
     
     def recover_alignment(self) -> None:
         # greedily recover the alignment based on segment equality
-        # assume that tgt contains extra elements and src == (tgt - extra)
+        # - we align only non-whitespace segments
+        #    (whitespace may differ for src and tgt because of the non-reversible sentence segmentation)
+        # - some segments from tgt may be composed of more than one segment from src
+        #    for example src: "Hello","world", tgt: "Helloworld"
         assert self.alignment.is_empty()
-        src_iter = iter(self.src)
-        for seg_tgt in self.tgt:
-            # skip sentence separators
-            if isinstance(seg_tgt, SentenceSeparator):
-                continue
 
+        # filter whitespace and sentence separators
+        src_nonwhitespace = (seg for seg in self.src if not isinstance(seg, WhitespaceSegment) or str(seg) == "\n")
+        tgt_nonwhitespace = (seg for seg in self.tgt if not isinstance(seg, (WhitespaceSegment, SentenceSeparator)) or str(seg) == "\n")
+
+        src_iter = iter(src_nonwhitespace)
+        for seg_tgt in tgt_nonwhitespace:
             seg_tgt_str = str(seg_tgt)
             while True:
                 seg_src = next(src_iter)
                 if str(seg_src) == seg_tgt_str:
                     self.alignment.add(seg_src, seg_tgt)
                     break
-                if seg_tgt_str.startswith(str(seg_src)):
+                elif seg_tgt_str.startswith(str(seg_src)):
                     self.alignment.add(seg_src, seg_tgt)
                     seg_tgt_str = seg_tgt_str[len(seg_src):]
+                else:
+                    raise AssertionError(f"Cannot recover alignment from {self.src} and {self.tgt}")
     
         try:
             next(src_iter)
         except StopIteration:
             pass
         else:
-            assert False
-
+            raise AssertionError(f"Cannot recover alignment from {self.src} and {self.tgt}")
+        
     def recover_newline_alignment(self) -> None:
         src_newlines = [nl for nl in self.src if str(nl) == "\n"]
         tgt_newlines = [nl for nl in self.tgt if str(nl) == "\n"]

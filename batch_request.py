@@ -23,6 +23,7 @@ class BatchRequest:
     def __call__(self, line: str) -> None:
         size = self.compute_size(line)
         logger.debug(f"Adding {size} bytes to batch of {len(self.batch)} lines")
+        # TODO: handle the case where a single line is larger than the batch size
         if self.batch_current_bytes + size > self.batch_max_bytes:
             logger.debug(f"Sending batch of {len(self.batch)} lines")
             self._send_batch()

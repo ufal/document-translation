@@ -183,7 +183,8 @@ class TagReinserter:
                 max_tgt_index = max(max(text_tgt_indices), max_tgt_index)
 
             to_insert[min_tgt_index].append(opening_tag)
-            to_insert[max_tgt_index+1].append(closing_tag)
+            # we prepend the closing tag so that it matches the order of the opening tags
+            to_insert[max_tgt_index+1].insert(0, closing_tag)
 
         logger.info(f"now reinserting paired tags")
         num_inserted = 0
