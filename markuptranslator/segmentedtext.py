@@ -19,8 +19,6 @@ class Segment(object):
         return repr(self.string)
     def __len__(self) -> int:
         return len(self.string)
-    def __hash__(self) -> int:
-        return hash(self.string)
 
 class TextSegment(Segment):
     def debug_color(self, string: str) -> str:
