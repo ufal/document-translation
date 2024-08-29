@@ -21,9 +21,11 @@ class TagReinserter:
                 # replace the segment
                 tgt_seg = next(iter(tgt_seg_set))
                 assert isinstance(tgt_seg, WhitespaceSegment)
-                aligned_segments.alignment.remove(src_seg, tgt_seg)
-                aligned_segments.tgt.replace(tgt_seg, src_seg)
-                aligned_segments.alignment.add(src_seg, src_seg)
+                # only replace if the whitespace differs from the original
+                if str(src_seg) != str(tgt_seg):
+                    aligned_segments.alignment.remove(src_seg, tgt_seg)
+                    aligned_segments.tgt.replace(tgt_seg, src_seg)
+                    aligned_segments.alignment.add(src_seg, src_seg)
 
         return aligned_segments
 
@@ -46,9 +48,18 @@ class TagReinserter:
             # reinsert unaligned tags
             if isinstance(segment, TagSegment):
                 return True
-            # reinsert whitespace if it is not a simple space and it is not  newline
+            # reinsert whitespace if it is not a simple space and it is not newline
             if isinstance(segment, WhitespaceSegment) and str(segment) != " " and str(segment) != "\n":
                 return True
+
+            # reinsert single space if it is in beginning or end of line
+            # this fixes Lindat translator which strips leading and trailing spaces
+            if str(segment) == " ":
+                # get the previous and next segment, on boundary we use "\n"
+                prev = aligned_segments.src[i-1] if 0 <= i-1 < len(aligned_segments.src) else WhitespaceSegment("\n")
+                next = aligned_segments.src[i+1] if 0 <= i+1 < len(aligned_segments.src) else WhitespaceSegment("\n")
+                if str(prev) == "\n" or str(next) == "\n":
+                    return True
             return False
 
         rightmost_alignment = aligned_segments.rightmost_alignment_by_src()
@@ -160,7 +171,6 @@ class TagReinserter:
             opening_src_index, opening_tag = unique_opening_tags[tag_src_index]
             assert opening_src_index == tag_src_index
             closing_src_index, closing_tag = unique_closing_tags[tag_src_index]
-            assert min_tgt_index <= max_tgt_index
 
             # find the current line
             line_bound_index = bisect_left(src_line_boundaries, tag_src_index)
@@ -169,18 +179,20 @@ class TagReinserter:
             assert left_line_bound <= tag_src_index and tag_src_index < right_line_bound
 
             # find where the text begins and ends in the current line
-            text_src_indices = {i for i, seg in list(enumerate(aligned_segments.src))[left_line_bound:right_line_bound] if isinstance(seg, TextSegment)}
-            first_text_src_index = min(text_src_indices)
-            last_text_src_index = max(text_src_indices)
+            first_text_src_index = left_line_bound
+            while not isinstance(aligned_segments.src[first_text_src_index], TextSegment):
+                first_text_src_index += 1
+            last_text_src_index = right_line_bound-1
+            while not isinstance(aligned_segments.src[last_text_src_index], TextSegment):
+                last_text_src_index -= 1
 
             # if the tag spans the entire line, then we make it span the entire line in the target
             if opening_src_index <= first_text_src_index and closing_src_index >= last_text_src_index:
-                logger.info(f"Found a tag that spans the entire line {line_bound_index} in the source.")
+                logger.info(f"Found a tag {opening_tag.debug_str} that spans the entire line {line_bound_index} in the source.")
                 left_tgt_line_bound = tgt_line_boundaries[line_bound_index-1]+1
                 right_tgt_line_bound = tgt_line_boundaries[line_bound_index]
-                text_tgt_indices = {i for i, seg in list(enumerate(aligned_segments.tgt))[left_tgt_line_bound:right_tgt_line_bound] if isinstance(seg, TextSegment)}
-                min_tgt_index = min(min_tgt_index, min(text_tgt_indices))
-                max_tgt_index = max(max(text_tgt_indices), max_tgt_index)
+                min_tgt_index = left_tgt_line_bound
+                max_tgt_index = right_tgt_line_bound-1
 
             to_insert[min_tgt_index].append(opening_tag)
             # we prepend the closing tag so that it matches the order of the opening tags

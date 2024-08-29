@@ -97,9 +97,10 @@ class AlignedSegments:
     def rightmost_alignment_by_src(self) -> List[int]:
         rightmost_alignment: List[int] = []
         current = -1
+        tgt_index_lookup = {tgt: i for i, tgt in enumerate(self.tgt)}
         for seg in self.src:
             if self.alignment.is_src_aligned(seg):
-                tgt_indices = [self.tgt.index(tgt) for tgt in self.alignment.get(seg)]
+                tgt_indices = [tgt_index_lookup[tgt] for tgt in self.alignment.get(seg)]
                 current = max(current, *tgt_indices)
             rightmost_alignment.append(current)
         return rightmost_alignment
@@ -107,9 +108,10 @@ class AlignedSegments:
     def leftmost_alignment_by_src(self) -> List[int]:
         leftmost_alignment: List[int] = []
         current = len(self.tgt)
+        tgt_index_lookup = {tgt: i for i, tgt in enumerate(self.tgt)}
         for seg in reversed(self.src):
             if self.alignment.is_src_aligned(seg):
-                tgt_indices = [self.tgt.index(tgt) for tgt in self.alignment.get(seg)]
+                tgt_indices = [tgt_index_lookup[tgt] for tgt in self.alignment.get(seg)]
                 current = min(current, *tgt_indices)
             leftmost_alignment.append(current)
         return list(reversed(leftmost_alignment))
