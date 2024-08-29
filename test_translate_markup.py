@@ -40,19 +40,13 @@ class TagReinserterTester(unittest.TestCase):
             "<g id='5'>","se"," ","v"," ","říjnu"," ","žení","</g>",".","</g>"
         ])
         src = SegmentedText(filter(lambda x: not isinstance(x, WhitespaceSegment), src))
-        # tgt = SegmentedText.from_string_list(["A"," ","friend"," ","of"," ","mine"," ","who"," ","works"," ","in"," ","banking"," ","is"," ","getting"," ","married"," ","in"," ","October","."])
         tgt = SegmentedText.from_string("A friend of mine who works in banking is getting married in October .")
         aligned_segments = AlignedSegments(src, tgt)
-        aligned_segments.alignment_from_iterable([(2,6), (4,2), (8,8), (9,10), (11,12),(12,14),(13,14),(17,22),(19,24),(20,18),(20,20),(22,26)])
+        aligned_segments.alignment_from_iterable([(2,6), (4,2), (8,8), (9,10), (11,12),(12,14),(13,14),(18,22),(19,24),(20,18),(20,20),(22,26)])
 
-        print("BEGIN STATE")
-        aligned_segments.debug_print()
-
-        print("PROCEED")
         TagReinserter.reinsert_tags(aligned_segments)
 
-        print("END STATE")
-        aligned_segments.debug_print()
+        self.assertEqual(str(aligned_segments.tgt), "<g id='1'>A <g id='2'><g id='3'>friend</g> of mine</g> who works <g id='4'>in banking</g> is <g id='5'>getting married in October</g> .</g>")
 
     def test_reinsert_long_tag(self):
         src = SegmentedText.from_string_list([
@@ -76,9 +70,8 @@ class TagReinserterTester(unittest.TestCase):
         tgt = SegmentedText.from_string_list(['Jak', ' ', 'číst', ' ', 'taxobox', 'Mateřidouška'])
         aligned_segments = AlignedSegments(src, tgt)
         aligned_segments.alignment_from_iterable([(5,0), (6,1), (7,2), (8,3), (9, 4), (13, 5)])
-        aligned_segments.debug_print()
         TagReinserter.reinsert_tags(aligned_segments)
-        aligned_segments.debug_print()
+        self.assertEqual(str(aligned_segments.tgt), '<g id="1"><g id="2"><g id="4">Jak číst taxobox</g></g></g>Mateřidouška')
 
 
 class DummyTranslator(Translator):
@@ -139,6 +132,12 @@ class MarkupTranslatorTester(unittest.TestCase):
         tgt_expected = " <g id='1'>\t</g>  <g id='2'>Hello\t</g><g id='3'>\tworld<g id='4'>.\t</g>\t</g> \t \n  How\t\t\tare    you?\n\n"
         tgt = self.markup_translator.translate(src)
         self.assertEqual(tgt, tgt_expected)
+    
+    def test_added_whitespace(self):
+        src = "Ahoj<x id='1'>světe<x id='2'>!"
+        tgt_expected = "Hello<x id='1'>world<x id='2'>!"
+        tgt = self.markup_translator.translate(src)
+        self.assertEqual(tgt, tgt_expected)
 
 class ProductionMarkupTranslatorTester(unittest.TestCase):
     def setUp(self):
@@ -152,19 +151,17 @@ class ProductionMarkupTranslatorTester(unittest.TestCase):
         tgt = self.mt.translate(src)
         print(src)
         print(tgt)
+        self.assertEqual(tgt, '<g id="1">Tobacco </g>and<g id="2"> sugar cane </g>growing - plantations.')
 
     def test_crossing_hard(self):
         src = 'Podrobnosti naleznete na stránce <g id="3">Podmínky užití</g>.'
         tgt = self.mt.translate(src)
-        print(src)
-        print(tgt)
+        self.assertEqual(tgt, 'See <g id="3">Terms of Use</g> for details.')
 
-    def test_keep_ending_whitespace(self):
-        src = 'Testovací věta. Testovací věta'
-        # tgt_expected = " <g id='1'>\t</g>  <g id='2'>Hello\t</g><g id='3'>\tworld<g id='4'>.\t</g>\t</g> \t \n  How\t\t\tare    you?\n\n"
+    def test_keep_whitespace_at_ends(self):
+        src = 'Testovací věta. \n Testovací věta.  \n  Testovací věta.\n\n \n  \n'
         tgt = self.mt.translate(src)
-        print(tgt)
-        # self.assertEqual(tgt, tgt_expected)
+        self.assertEqual(tgt, "Test sentence. \n Test sentence.  \n  Test sentence.\n\n \n  \n")
 
 if __name__ == "__main__":
     unittest.main()
