@@ -140,19 +140,21 @@ class SegmentedText(List[Segment]):
     def debug_str(self) -> str:
         return ''.join(x.debug_str for x in self)
 
-    def debug_print(self) -> None:
-        print(self.debug_str)
+    def debug_print(self) -> str:
+        result = []
+        result.append(self.debug_str + "\n")
         index_top = 0
         index_bottom = 0
         for i, seg in enumerate(self):
             index_str = str(i)
-            print(seg.debug_color(index_str), end="")
+            result.append(seg.debug_color(index_str))
             index_top += seg.debug_len()
             index_bottom += len(index_str)
             if index_bottom < index_top:
-                print(" "*(index_top-index_bottom), end="")
+                result.append(" "*(index_top-index_bottom))
                 index_bottom = index_top
-        print()
+        result.append("\n")
+        return "".join(result)
 
     def split_sentences(self) -> Iterator["SegmentedText"]:
         i = 0

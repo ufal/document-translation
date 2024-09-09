@@ -89,7 +89,6 @@ class TagReinserter:
                     # TODO: find a better reinsertion reinsert_index in this case
                     logger.error(f"line {line_num}: there is no non-crossing placement for {index}-{seg.debug_str}")
                     reinsert_index = leftmost
-                    # aligned_segments.debug_print()
                     # print(rightmost_alignment)
                     # print(leftmost_alignment)
                     # crossings = sum()
