@@ -2,10 +2,10 @@ import logging
 import re
 from typing import List
 
-from align import LindatAligner
-from markuptranslator.markuptranslator import MarkupTranslator
+from lindat_services.align import LindatAligner
+from document_translation.markuptranslator import MarkupTranslator
 from translate_markup import RegexTokenizer
-from translate import LindatTranslator
+from lindat_services.translate import LindatTranslator
 import argparse
 
 import fitz
@@ -137,7 +137,7 @@ class PdfEditor:
 
         self.doc.save(output_file, garbage=4, clean=True, deflate=True, deflate_images=True, deflate_fonts=True)
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='Translate PDF file')
     parser.add_argument('input_file', help='Input PDF file')
     parser.add_argument('src_lang', help='Source language')
@@ -162,3 +162,7 @@ if __name__ == "__main__":
     translated_lines = translations.replace("\n", "<page-break />").split("<lb />")
     assert len(lines) == len(translated_lines), f"{len(lines)} != {len(translated_lines)}"
     pdf_editor.merge_text(translated_lines, args.output_file)
+
+
+if __name__ == "__main__":
+    main()

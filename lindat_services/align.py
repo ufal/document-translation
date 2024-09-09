@@ -3,8 +3,8 @@ from typing import List, Tuple
 import requests
 import json
 
-from batch_request import BatchRequest
-from markuptranslator.markuptranslator import Aligner
+from .batch_request import BatchRequest
+from document_translation.markuptranslator import Aligner
 
 class LindatAligner(Aligner):
     def __init__(self, src_lang: str, tgt_lang: str):

@@ -1,7 +1,7 @@
 from collections import Counter, defaultdict
 from typing import Dict, Iterable, List, Optional, Self, Set, Tuple
 
-from markuptranslator.segmentedtext import Segment
+from document_translation.segmentedtext import Segment
 
 
 class Alignment:

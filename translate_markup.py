@@ -1,10 +1,11 @@
 import logging
 import re
 from typing import List
+import argparse
 
-from align import LindatAligner
-from markuptranslator.markuptranslator import MarkupTranslator, Tokenizer
-from translate import LindatTranslator
+from lindat_services.align import LindatAligner
+from document_translation.markuptranslator import MarkupTranslator, Tokenizer
+from lindat_services.translate import LindatTranslator
 
 
 logging.basicConfig()
@@ -32,8 +33,7 @@ class RegexTokenizer(Tokenizer):
     def tokenize(self, string: str) -> List[str]:
         return re.findall(self.WORD_TOKENIZATION_RULES, string)
 
-import argparse
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='Translate texts line by line')
     parser.add_argument('input_file', help='Input text file with markup')
     parser.add_argument('src_lang', help='Source language')
@@ -57,3 +57,6 @@ if __name__ == "__main__":
         input_text = f_in.read()
         output = mt.translate(input_text)
         f_out.write(output)
+
+if __name__ == "__main__":
+    main()

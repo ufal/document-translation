@@ -2,15 +2,19 @@ import re
 from typing import List, Tuple
 import unittest
 import logging
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from align import LindatAligner
-from markuptranslator.alignedsegments import AlignedSegments
-from markuptranslator.alignment import Alignment
-from markuptranslator.markuptranslator import Aligner, MarkupTranslator, Translator
-from markuptranslator.segmentedtext import SegmentedText, WhitespaceSegment
-from markuptranslator.tagreinserter import TagReinserter
-from translate import LindatTranslator
+from document_translation.alignedsegments import AlignedSegments
+from document_translation.alignment import Alignment
+from document_translation.markuptranslator import Aligner, MarkupTranslator, Translator
+from document_translation.segmentedtext import SegmentedText, WhitespaceSegment
+from document_translation.tagreinserter import TagReinserter
 from translate_markup import RegexTokenizer
+
+from lindat_services.translate import LindatTranslator
+from lindat_services.align import LindatAligner
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)

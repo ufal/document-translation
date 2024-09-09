@@ -2,8 +2,8 @@ from bisect import bisect_left
 from collections import defaultdict
 import logging
 from typing import Dict, List, Set, Tuple
-from markuptranslator.alignedsegments import AlignedSegments
-from markuptranslator.segmentedtext import PairedTagSegment, SegmentedText, TagSegment, TextSegment, WhitespaceSegment
+from document_translation.alignedsegments import AlignedSegments
+from document_translation.segmentedtext import PairedTagSegment, SegmentedText, TagSegment, TextSegment, WhitespaceSegment
 
 logger = logging.getLogger(__name__)
 

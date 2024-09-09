@@ -3,10 +3,10 @@ import logging
 from time import perf_counter
 from typing import List, Tuple
 
-from markuptranslator.alignedsegments import AlignedSegments
-from markuptranslator.alignment import Alignment
-from markuptranslator.segmentedtext import SegmentedText, SentenceSeparator, TagSegment, TextSegment, WhitespaceSegment
-from markuptranslator.tagreinserter import TagReinserter
+from document_translation.alignedsegments import AlignedSegments
+from document_translation.alignment import Alignment
+from document_translation.segmentedtext import SegmentedText, SentenceSeparator, TagSegment, TextSegment, WhitespaceSegment
+from document_translation.tagreinserter import TagReinserter
 
 
 logger = logging.getLogger(__name__)

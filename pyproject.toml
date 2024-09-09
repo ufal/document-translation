@@ -1,0 +1,32 @@
+[project]
+name = "document_translation"
+version = "0.0.2"
+authors = [
+  { name="Jiří Balhar", email="balhar.j@gmail.com" },
+]
+description = "Translate documents such as docx, html or pdf to another language."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "requests",
+  "tqdm",
+  "termcolor",
+  "sentence_splitter",
+]
+
+[project.urls]
+Homepage = "https://github.com/kukas/document-translation"
+Issues = "https://github.com/kukas/document-translation/issues"
+
+[project.scripts]
+translate_markup = "translate_markup:main"
+translate_pdf = "translate_pdf:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

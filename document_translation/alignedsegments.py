@@ -1,7 +1,7 @@
 from typing import Iterable, List, Optional, Self, Tuple
 
-from markuptranslator.alignment import Alignment
-from markuptranslator.segmentedtext import Segment, SegmentedText, SentenceSeparator, WhitespaceSegment
+from document_translation.alignment import Alignment
+from document_translation.segmentedtext import Segment, SegmentedText, SentenceSeparator, WhitespaceSegment
 
 
 class AlignedSegments:

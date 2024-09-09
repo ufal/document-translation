@@ -6,8 +6,8 @@ import argparse
 
 from sentence_splitter import SentenceSplitter # type: ignore
 
-from batch_request import BatchRequest
-from markuptranslator.markuptranslator import Translator
+from .batch_request import BatchRequest
+from document_translation.markuptranslator import Translator
 
 class LindatTranslator(Translator):
     def __init__(self, src_lang: str, tgt_lang: str, model: str):
