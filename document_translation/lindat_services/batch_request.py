@@ -8,12 +8,18 @@ class BatchRequest:
     def __init__(self, batch_max_bytes: int, callback: Callable[[List[Any]], List[Any]], compute_size: Callable[[Any], int]):
         self.batch: List[str] = []
         self.batch_current_bytes = 0
+
         self.batch_max_bytes = batch_max_bytes
         self.callback = callback
         self.compute_size = compute_size
         self.show_progress = True
 
         self.results: List[str] = []
+    
+    def clean(self) -> None:
+        self.batch = []
+        self.batch_current_bytes = 0
+        self.results = []
 
     def _send_batch(self) -> None:
         self.results += self.callback(self.batch)
@@ -42,4 +48,6 @@ class BatchRequest:
                 self(line)
                 pbar.update(size)
             self.flush()
-        return self.results
+        results = self.results
+        self.clean()
+        return results
