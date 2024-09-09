@@ -137,6 +137,8 @@ class MarkupTranslator:
 
         # recover the sentence segmentation from src_sentences
         src_for_translation_to_src_sentences = AlignedSegments(src_for_translation, src_sentences)
+        logger.debug(":: recover_alignment")
+        logger.debug(src_for_translation_to_src_sentences.debug_print())
         src_for_translation_to_src_sentences.recover_alignment()
 
         tgt_sentences = SegmentedText.from_sentences(tgt_sentences)
