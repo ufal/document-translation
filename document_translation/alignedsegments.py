@@ -1,8 +1,7 @@
-from typing import Iterable, List, Optional, Self, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 from document_translation.alignment import Alignment
 from document_translation.segmentedtext import Segment, SegmentedText, SentenceSeparator, WhitespaceSegment
-
 
 class AlignedSegments:
     def __init__(self,
@@ -36,7 +35,7 @@ class AlignedSegments:
     def __str__(self) -> str:
         return f"AlignedSegments({self.src}, {self.tgt}, {self.alignment})"
     
-    def __add__(self, other: Self):
+    def __add__(self, other: "AlignedSegments") -> "AlignedSegments":
         # TODO (low priority): (self.src + other.src) should return SegmentedText right away
         src = SegmentedText(self.src + other.src)
         tgt = SegmentedText(self.tgt + other.tgt)
@@ -141,7 +140,7 @@ class AlignedSegments:
     def swap_sides(self) -> "AlignedSegments":
         return AlignedSegments(self.tgt, self.src, self.alignment.swap())
     
-    def compose(self, other: Self) -> "AlignedSegments":
+    def compose(self, other: "AlignedSegments") -> "AlignedSegments":
         assert str(self.tgt) == str(other.src)
         new_alignment = self.alignment.compose(other.alignment)
         return AlignedSegments(self.src, other.tgt, new_alignment)

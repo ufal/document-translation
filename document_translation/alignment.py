@@ -1,5 +1,5 @@
 from collections import Counter, defaultdict
-from typing import Dict, Iterable, List, Optional, Self, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from document_translation.segmentedtext import Segment
 
@@ -18,7 +18,7 @@ class Alignment:
             self.aligned_tgts.update(tgt_set)
 
     @classmethod
-    def from_iterable(cls, alignment: Iterable[Tuple[Segment, Segment]]) -> Self:
+    def from_iterable(cls, alignment: Iterable[Tuple[Segment, Segment]]) -> "Alignment":
         instance = cls()
         instance.update_from_iterable(alignment)
         return instance
@@ -54,7 +54,7 @@ class Alignment:
     def __str__(self) -> str:
         return f"Alignment({self.to_list()})"
 
-    def __add__(self, other: Self):
+    def __add__(self, other: "Alignment"):
         new_alignment = Alignment(self._src_to_tgt)
         for (src, tgt_set) in other._src_to_tgt.items():
             for tgt in tgt_set:
@@ -68,7 +68,7 @@ class Alignment:
                 new_alignment.add(tgt, src)
         return new_alignment
 
-    def compose(self, other: Self):
+    def compose(self, other: "Alignment"):
         composed_alignment = Alignment()
         for (src, tgt_set) in self._src_to_tgt.items():
             for tgt in tgt_set:
