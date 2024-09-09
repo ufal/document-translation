@@ -3,10 +3,10 @@ import re
 from typing import List
 import argparse
 
-from lindat_services.align import LindatAligner
+from document_translation.lindat_services.align import LindatAligner
 from document_translation.markuptranslator import MarkupTranslator, Tokenizer
 from document_translation.regextokenizer import RegexTokenizer
-from lindat_services.translate import LindatTranslator
+from document_translation.lindat_services.translate import LindatTranslator
 
 
 logging.basicConfig()

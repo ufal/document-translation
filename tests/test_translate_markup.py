@@ -13,8 +13,8 @@ from document_translation.segmentedtext import SegmentedText, WhitespaceSegment
 from document_translation.tagreinserter import TagReinserter
 from document_translation.regextokenizer import RegexTokenizer
 
-from lindat_services.translate import LindatTranslator
-from lindat_services.align import LindatAligner
+from document_translation.lindat_services.translate import LindatTranslator
+from document_translation.lindat_services.align import LindatAligner
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
