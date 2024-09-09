@@ -4,7 +4,7 @@ from typing import List
 
 from lindat_services.align import LindatAligner
 from document_translation.markuptranslator import MarkupTranslator
-from translate_markup import RegexTokenizer
+from document_translation.regextokenizer import RegexTokenizer
 from lindat_services.translate import LindatTranslator
 import argparse
 

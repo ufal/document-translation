@@ -5,6 +5,7 @@ import argparse
 
 from lindat_services.align import LindatAligner
 from document_translation.markuptranslator import MarkupTranslator, Tokenizer
+from document_translation.regextokenizer import RegexTokenizer
 from lindat_services.translate import LindatTranslator
 
 
@@ -14,24 +15,6 @@ logger.setLevel(logging.INFO)
 loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
 for _logger in loggers:
     _logger.setLevel(logger.level)
-
-class RegexTokenizer(Tokenizer):
-    def __init__(self):
-        ACCENT = chr(769)
-        self.WORD_TOKENIZATION_RULES = re.compile(r"""
-        [\w""" + ACCENT + """]+://(?:[a-zA-Z]|[0-9]|[$-_@.&+])+
-        |[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+.[a-zA-Z0-9-.]+
-        |[0-9]+-[а-яА-ЯіїІЇ'’`""" + ACCENT + r"""]+
-        |[+-]?[0-9](?:[0-9,.-]*[0-9])?
-        |[\w""" + ACCENT + r"""](?:[\w'’`-""" + ACCENT + r"""]?[\w""" + ACCENT + r"""]+)*
-        |[\w""" + ACCENT + r"""].(?:\[\w""" + ACCENT + r"""].)+[\w""" + ACCENT + r"""]?
-        |[^\s]
-        |[.!?]+
-        |-+
-        """, re.X | re.U)
-
-    def tokenize(self, string: str) -> List[str]:
-        return re.findall(self.WORD_TOKENIZATION_RULES, string)
 
 def main():
     parser = argparse.ArgumentParser(description='Translate texts line by line')

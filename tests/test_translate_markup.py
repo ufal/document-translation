@@ -11,7 +11,7 @@ from document_translation.alignment import Alignment
 from document_translation.markuptranslator import Aligner, MarkupTranslator, Translator
 from document_translation.segmentedtext import SegmentedText, WhitespaceSegment
 from document_translation.tagreinserter import TagReinserter
-from translate_markup import RegexTokenizer
+from document_translation.regextokenizer import RegexTokenizer
 
 from lindat_services.translate import LindatTranslator
 from lindat_services.align import LindatAligner
