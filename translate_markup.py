@@ -1,10 +1,8 @@
 import logging
-import re
-from typing import List
 import argparse
 
 from document_translation.lindat_services.align import LindatAligner
-from document_translation.markuptranslator import MarkupTranslator, Tokenizer
+from document_translation.markuptranslator import MarkupTranslator
 from document_translation.regextokenizer import RegexTokenizer
 from document_translation.lindat_services.translate import LindatTranslator
 
