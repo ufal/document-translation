@@ -1,7 +1,10 @@
 import fitz
 from typing import List
+import os
+font_path = os.path.join(os.path.dirname(__file__), "..", "fonts")
 
 class PdfEditor:
+    # TODO: use importlib https://setuptools.pypa.io/en/latest/userguide/datafiles.html#accessing-data-files-at-runtime
     flag_to_static_font = {
         # https://pymupdf.readthedocs.io/en/latest/textpage.html#span-dictionary
         # “flags” is an integer, which represents font properties except for the first bit 0. They are to be interpreted like this:
@@ -10,18 +13,18 @@ class PdfEditor:
         # bit 2: serifed (22)
         # bit 3: monospaced (23)
         # bit 4: bold (24)
-        0b01000: ('NotoSansMono-Regular', 'fonts/Noto_Sans_Mono/static/NotoSansMono-Regular.ttf'),
-        0b01010: ('NotoSansMono-Regular', 'fonts/Noto_Sans_Mono/static/NotoSansMono-Regular.ttf'),
-        0b11000: ('NotoSansMono-Bold', 'fonts/Noto_Sans_Mono/static/NotoSansMono-Bold.ttf'),
-        0b11010: ('NotoSansMono-Bold', 'fonts/Noto_Sans_Mono/static/NotoSansMono-Bold.ttf'),
-        0b00100: ('NotoSerif-Regular', 'fonts/Noto_Serif/static/NotoSerif-Regular.ttf'),
-        0b00110: ('NotoSerif-Italic', 'fonts/Noto_Serif/static/NotoSerif-Italic.ttf'),
-        0b10100: ('NotoSerif-Bold', 'fonts/Noto_Serif/static/NotoSerif-Bold.ttf'),
-        0b10110: ('NotoSerif-BoldItalic', 'fonts/Noto_Serif/static/NotoSerif-BoldItalic.ttf'),
-        0b00000: ('NotoSans-Regular', 'fonts/Noto_Sans/static/NotoSans-Regular.ttf'),
-        0b00010: ('NotoSans-Italic', 'fonts/Noto_Sans/static/NotoSans-Italic.ttf'),
-        0b10000: ('NotoSans-Bold', 'fonts/Noto_Sans/static/NotoSans-Bold.ttf'),
-        0b10010: ('NotoSans-BoldItalic', 'fonts/Noto_Sans/static/NotoSans-BoldItalic.ttf'),
+        0b01000: ('NotoSansMono-Regular', font_path+'/Noto_Sans_Mono/static/NotoSansMono-Regular.ttf'),
+        0b01010: ('NotoSansMono-Regular', font_path+'/Noto_Sans_Mono/static/NotoSansMono-Regular.ttf'),
+        0b11000: ('NotoSansMono-Bold', font_path+'/Noto_Sans_Mono/static/NotoSansMono-Bold.ttf'),
+        0b11010: ('NotoSansMono-Bold', font_path+'/Noto_Sans_Mono/static/NotoSansMono-Bold.ttf'),
+        0b00100: ('NotoSerif-Regular', font_path+'/Noto_Serif/static/NotoSerif-Regular.ttf'),
+        0b00110: ('NotoSerif-Italic', font_path+'/Noto_Serif/static/NotoSerif-Italic.ttf'),
+        0b10100: ('NotoSerif-Bold', font_path+'/Noto_Serif/static/NotoSerif-Bold.ttf'),
+        0b10110: ('NotoSerif-BoldItalic', font_path+'/Noto_Serif/static/NotoSerif-BoldItalic.ttf'),
+        0b00000: ('NotoSans-Regular', font_path+'/Noto_Sans/static/NotoSans-Regular.ttf'),
+        0b00010: ('NotoSans-Italic', font_path+'/Noto_Sans/static/NotoSans-Italic.ttf'),
+        0b10000: ('NotoSans-Bold', font_path+'/Noto_Sans/static/NotoSans-Bold.ttf'),
+        0b10010: ('NotoSans-BoldItalic', font_path+'/Noto_Sans/static/NotoSans-BoldItalic.ttf'),
     }
 
     def __init__(self, input_file):

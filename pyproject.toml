@@ -20,6 +20,12 @@ dependencies = [
   "PyMuPDF",
 ]
 
+[tool.setuptools.package-data]
+myModule = ["*.ttf"]
+
+[tool.setuptools]
+include-package-data = true
+
 [project.urls]
 Homepage = "https://github.com/kukas/document-translation"
 Issues = "https://github.com/kukas/document-translation/issues"
@@ -29,5 +35,5 @@ translate_markup = "translate_markup:main"
 translate_pdf = "translate_pdf:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
