@@ -1,6 +1,6 @@
 [project]
 name = "document_translation"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
   { name="Jiří Balhar", email="balhar.j@gmail.com" },
 ]
@@ -31,8 +31,8 @@ Homepage = "https://github.com/kukas/document-translation"
 Issues = "https://github.com/kukas/document-translation/issues"
 
 [project.scripts]
-translate_markup = "translate_markup:main"
-translate_pdf = "translate_pdf:main"
+translate_markup = "document_translation.cli.translate_markup:main"
+translate_pdf = "document_translation.cli.translate_pdf:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]

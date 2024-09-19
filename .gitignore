@@ -4,3 +4,5 @@ cachedir/
 *.lines
 dist/
 .vscode
+build/
+*.egg-info
