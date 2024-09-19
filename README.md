@@ -2,9 +2,33 @@
 
 Automatically translate documents with **formatted** text such as Word, Powerpoint, RTF, HTML but also XML or even PDF!
 
-In this repository, we implement an end-to-end system for machine translation of documents. We build on top of [Okapi Framework](https://okapiframework.org/) and provide a simple simple script that extracts translatable, formatted text from documents and translates them, **preserving the formatting**. We preserve the in-line formatting by reinserting the markup into the translated document.
+In this repository, we implement an end-to-end system for machine translation of documents. We build on top of [Okapi Framework](https://okapiframework.org/) and provide a simple script that extracts translatable, formatted text from documents and translates them, **preserving the formatting**. We preserve the in-line formatting by reinserting the markup into the translated document.
 
-## Introduction
+## Features
+
+- [Python module](document_translation/) for automatic tag extraction from text and reinsertion of tags into translated text.
+- [Helpers for translation and word alignment](document_translation/lindat_services/) using [LINDAT public service APIs](https://lindat.cz/services/)
+- [Command-line interface for translating translation units with inline elements](translate_markup.py) in the [Moses InlineText](https://okapiframework.org/wiki/index.php/Moses_Text_Filter) format corresponding to the [XLIFF v1.2 translation unit format](http://docs.oasis-open.org/xliff/v1.2/os/xliff-core.html#Struct_InLine).
+- [Command-line interface for translating PDF documents](translate_pdf.py)
+- An [example script](scripts/run_pipeline.sh) for translating documents with wide range of formats utilizing the [Okapi Framework](https://okapiframework.org/)
+
+## Installation
+
+The Python module can be installed using pip from this repository:
+
+```bash
+pip install git+https://github.com/kukas/document-translation.git
+```
+
+The module allows you to automatically translate Moses InlineText files and PDF documents.
+
+To translate a wider variety of formats, install the [Okapi Framework](https://okapiframework.org/).
+
+## Usage
+
+See the [examples](examples/) directory for usage examples.
+
+## Translating text with markup
 
 How is translating formatted text different from non-formatted text? Consider the following example:
 

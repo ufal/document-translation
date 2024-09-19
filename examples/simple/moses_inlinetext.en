@@ -1,0 +1,4 @@
+Text in the first entry.
+Text of the second entry<lb/>which spans<lb/>several lines
+Third entry.
+Fourth entry with <g id="1">bold words</g> and some code:<x id="2"/>
