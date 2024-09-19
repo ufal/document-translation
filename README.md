@@ -10,7 +10,7 @@ In this repository, we implement an end-to-end system for machine translation of
 - [Helpers for translation and word alignment](document_translation/lindat_services/) using [LINDAT public service APIs](https://lindat.cz/services/)
 - [Command-line interface for translating translation units with inline elements](translate_markup.py) in the [Moses InlineText](https://okapiframework.org/wiki/index.php/Moses_Text_Filter) format corresponding to the [XLIFF v1.2 translation unit format](http://docs.oasis-open.org/xliff/v1.2/os/xliff-core.html#Struct_InLine).
 - [Command-line interface for translating PDF documents](translate_pdf.py)
-- An [example script](scripts/run_pipeline.sh) for translating documents with wide range of formats utilizing the [Okapi Framework](https://okapiframework.org/)
+- An [example script](examples/word_document) for translating documents with wide range of formats utilizing the [Okapi Framework](https://okapiframework.org/)
 
 ## Installation
 
