@@ -5,14 +5,14 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 class BatchRequest:
-    def __init__(self, batch_max_bytes: int, callback: Callable[[List[Any]], List[Any]], compute_size: Callable[[Any], int]):
+    def __init__(self, batch_max_bytes: int, callback: Callable[[List[Any]], List[Any]], compute_size: Callable[[Any], int], show_progress):
         self.batch: List[str] = []
         self.batch_current_bytes = 0
 
         self.batch_max_bytes = batch_max_bytes
         self.callback = callback
         self.compute_size = compute_size
-        self.show_progress = True
+        self.show_progress = show_progress
 
         self.results: List[str] = []
     

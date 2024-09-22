@@ -10,7 +10,7 @@ from .batch_request import BatchRequest
 from document_translation.markuptranslator import Translator
 
 class LindatTranslator(Translator):
-    def __init__(self, src_lang: str, tgt_lang: str, model: str):
+    def __init__(self, src_lang: str, tgt_lang: str, model: str, show_progress: bool = True):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         self.model = model
@@ -19,7 +19,7 @@ class LindatTranslator(Translator):
             text = "\n".join(batch) + "\n"
             src_sentences, tgt_sentences = self.translate_request(text)
             return list(zip(src_sentences, tgt_sentences))
-        self.batch_request = BatchRequest(20000, _send_batch, lambda x: len((x+"\n").encode()))
+        self.batch_request = BatchRequest(20000, _send_batch, lambda x: len((x+"\n").encode()), show_progress)
     
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
         if input_text == "":

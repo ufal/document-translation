@@ -7,7 +7,7 @@ from .batch_request import BatchRequest
 from document_translation.markuptranslator import Aligner
 
 class LindatAligner(Aligner):
-    def __init__(self, src_lang: str, tgt_lang: str):
+    def __init__(self, src_lang: str, tgt_lang: str, show_progress: bool = True):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         def _send_batch(batch: List[Tuple[str, str]]) -> List[List[Tuple[int, int]]]:
@@ -17,7 +17,7 @@ class LindatAligner(Aligner):
         def _compute_size(x: Tuple[str, str]) -> int:
             return len(json.dumps(x).encode())
 
-        self.batch_request = BatchRequest(100000, _send_batch, _compute_size)
+        self.batch_request = BatchRequest(100000, _send_batch, _compute_size, show_progress)
 
     def align(self, src_batch: List[List[str]], tgt_batch: List[List[str]]) -> List[List[Tuple[int, int]]]:
         
